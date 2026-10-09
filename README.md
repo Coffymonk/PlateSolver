@@ -40,7 +40,7 @@ Get the latest version from **[Releases](../../releases)**.
 
 | System | Download | Notes |
 |---|---|---|
-| Windows 10/11 | `PlateSolver-<version>-windows.zip` | Unzip and run `PlateSolver.exe`. The app is not code-signed: if Windows says "Windows protected your PC", click *More info* › *Run anyway*. |
+| Windows 10/11 | `PlateSolver-<version>-setup.exe` (installer) or `PlateSolver-<version>-windows.zip` (no installation) | The installer adds a Start-menu entry and an uninstaller; the zip runs from any folder (`PlateSolver.exe`). Neither is code-signed: if Windows says "Windows protected your PC", click *More info* › *Run anyway*. |
 | macOS | coming soon | Until then, run it from the source (below) or build the app yourself. |
 | Linux | coming soon | Until then, run it from the source (below) or build the app yourself. |
 

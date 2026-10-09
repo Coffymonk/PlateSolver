@@ -47,8 +47,11 @@ findstr /c:"all checks passed" "%OUT%\selftest.txt" >nul || goto testfailed
 echo [5/5] Packaging...
 del "%OUT%\PlateSolver-*-windows.zip" 2>nul
 powershell -NoProfile -Command "Compress-Archive -Path '%OUT%\PlateSolver' -DestinationPath '%OUT%\PlateSolver-%VERSION%-windows.zip' -Force" || goto failed
-set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
-if not exist "%ISCC%" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
+rem Inno Setup: the usual install folders (all users or just you), else ISCC.exe on the PATH
+set "ISCC="
+for %%d in ("%ProgramFiles(x86)%\Inno Setup 6" "%ProgramFiles%\Inno Setup 6" "%LOCALAPPDATA%\Programs\Inno Setup 6" "%ProgramFiles(x86)%\Inno Setup 7" "%ProgramFiles%\Inno Setup 7" "%LOCALAPPDATA%\Programs\Inno Setup 7") do if not defined ISCC if exist "%%~d\ISCC.exe" set "ISCC=%%~d\ISCC.exe"
+if not defined ISCC for /f "delims=" %%i in ('where ISCC.exe 2^>nul') do if not defined ISCC set "ISCC=%%i"
+if not defined ISCC set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
 if exist "%ISCC%" (
     "%ISCC%" /Q /DMyAppVersion=%VERSION% "build\windows\installer.iss" || goto failed
 ) else (

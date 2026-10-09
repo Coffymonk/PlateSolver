@@ -1,0 +1,3 @@
+OpenNGC by Mattia Verga, https://github.com/mattiaverga/OpenNGC
+Licensed under CC-BY-SA-4.0 (https://creativecommons.org/licenses/by-sa/4.0/).
+Converted to CSV (radians to degrees, duplicate/non-existent entries removed) for PlateSolver.

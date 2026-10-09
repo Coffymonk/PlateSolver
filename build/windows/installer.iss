@@ -13,6 +13,10 @@ AppName=PlateSolver
 AppVersion={#MyAppVersion}
 AppPublisher=Miklos Elmberg
 AppCopyright=Copyright (C) 2026 Miklos Elmberg. GPL-3.0-or-later.
+AppPublisherURL=https://github.com/Coffymonk/PlateSolver
+AppSupportURL=https://github.com/Coffymonk/PlateSolver/issues
+AppUpdatesURL=https://github.com/Coffymonk/PlateSolver/releases
+VersionInfoVersion={#MyAppVersion}
 ; The GPL is shown for information (it needs no acceptance), before the installation starts
 InfoBeforeFile=..\..\LICENSE
 DefaultDirName={autopf}\PlateSolver

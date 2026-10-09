@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PlateSolver manual</title>
+<style>
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; max-width: 60em; margin: 1.5em auto; padding: 0 1em; color: #1d2330; background: #fbfbfd; }
+  h1 { font-size: 20pt; margin-bottom: 0; }
+  h2 { font-size: 15pt; color: #1f5fa8; margin-top: 2em; border-bottom: 1px solid #d7dde7; padding-bottom: 3px; }
+  h3 { font-size: 12pt; color: #2a6fbd; margin-top: 1.3em; }
+  h4 { font-size: 10.5pt; color: #1d2330; margin: 1em 0 0.3em; }
+  table { border-collapse: collapse; margin: 0.6em 0; }
+  th, td { border: 1px solid #d7dde7; padding: 4px 9px; vertical-align: top; text-align: left; }
+  th { background: #eef2f8; }
+  code, kbd { font-family: Consolas, monospace; background: #eef2f8; padding: 0 3px; }
+  .tip { color: #1d7a3e; } .warn { color: #a55a00; } .muted { color: #6b7280; }
+  .box { border-left: 4px solid #5aa9ff; background: #eef5ff; padding: 6px 12px; margin: 0.8em 0; }
+</style>
+</head>
+<body>
+
+<h1 id="top"><a name="top"></a>PlateSolver manual</h1>
+<p class="muted">Version {{VERSION}}. Press <kbd>F1</kbd> anywhere in the program, or use <b>Help</b> at the right end of the toolbar, to open this manual. In Settings, the <b>Help</b> button jumps to the description of the page you are on.</p>
+
+<h2 id="contents"><a name="contents"></a>Contents</h2>
+<ol>
+  <li><a href="#introduction">What PlateSolver does</a></li>
+  <li><a href="#installing">Installing and starting</a></li>
+  <li><a href="#quickstart">Quick start</a></li>
+  <li><a href="#equipment-guide">Cameras, lenses and telescopes explained</a></li>
+  <li><a href="#window">The main window</a></li>
+  <li><a href="#opening">Opening images</a></li>
+  <li><a href="#solving">Plate solving</a></li>
+  <li><a href="#objects">The objects in your image</a></li>
+  <li><a href="#distances">Distances, sizes and light travel time</a></li>
+  <li><a href="#overlays">Overlays</a></li>
+  <li><a href="#export">Exporting and saving</a></li>
+  <li><a href="#batch">Batch solving a folder</a></li>
+  <li><a href="#settings">Settings reference</a></li>
+  <li><a href="#shortcuts">Keyboard and mouse</a></li>
+  <li><a href="#quiz">Astronomy quiz</a></li>
+  <li><a href="#troubleshooting">Troubleshooting</a></li>
+  <li><a href="#files">Files and folders</a></li>
+  <li><a href="#credits">Licence, data sources and credits</a></li>
+  <li><a href="#developers">Adding your own modules</a></li>
+  <li><a href="#whatsnew">What's new</a></li>
+</ol>
+
+<!-- ======================================================================= -->
+<h2 id="introduction"><a name="introduction"></a>1. What PlateSolver does</h2>
+<p>PlateSolver takes an astronomical image (FITS, PixInsight XISF, TIFF, JPG, PNG or iPhone HEIC) and works out exactly which part of the sky it shows. This is called <b>plate solving</b>. It then finds the galaxies, nebulae, star clusters and bright stars in the picture and shows them:</p>
+<ul>
+  <li>as <b>labels and outlines on the image</b>, with each object's catalogued size and orientation,</li>
+  <li>in a <b>list in the sidebar</b> with each object's <b>distance from Earth in light-years</b> (you choose the number of decimals) and its true size,</li>
+  <li>with <b>links</b>: double-click an object to open its Wikipedia article (in the language you choose) or its page in the SIMBAD astronomical database.</li>
+</ul>
+<p>Hovering the mouse over an object shows an information card: distance, size in light-years and when the light in your picture left it. Extra overlays add a coordinate grid, constellation figures and a north/east compass. The annotated picture can be exported for sharing, and a whole folder of images can be solved in one go.</p>
+
+<h3 id="how-it-works"><a name="how-it-works"></a>How it works</h3>
+<p>The work happens in stages. Each stage is handled by one or more <b>modules</b>, which you can switch on and off and configure in Settings:</p>
+<table>
+<tr><th>Stage</th><th>What happens</th><th>Modules included</th></tr>
+<tr><td>1. Open</td><td>The file is read. Pointing information (RA/Dec, focal length, pixel size) is taken from the file header when present.</td><td>FITS, XISF, TIFF, JPEG/PNG/HEIC</td></tr>
+<tr><td>2. Solve</td><td>The star pattern is matched against a star catalogue, which gives the exact sky position of every pixel.</td><td>Existing solution in file, ASTAP, astrometry.net</td></tr>
+<tr><td>3. Find objects</td><td>Catalogues are searched for objects inside the solved field.</td><td>SIMBAD (online), OpenNGC (built in, offline), HyperLeda (optional, from ASTAP)</td></tr>
+<tr><td>4. Distances</td><td>Each object gets the best available distance.</td><td>Parallax, published distances, redshift</td></tr>
+<tr><td>5. Links</td><td>Each object gets links to information pages.</td><td>Wikipedia, SIMBAD page</td></tr>
+<tr><td>6. Draw</td><td>Overlays are drawn on the image.</td><td>Object labels, compass, RA/Dec grid, constellations</td></tr>
+</table>
+
+<!-- ======================================================================= -->
+<h2 id="installing"><a name="installing"></a>2. Installing and starting</h2>
+<h3 id="install-python"><a name="install-python"></a>Starting the program</h3>
+<ol>
+  <li>PlateSolver needs <b>Python 3.10 or newer</b> (from python.org; tick "Add python.exe to PATH" when installing).</li>
+  <li>Double-click <code>run.bat</code> in the PlateSolver folder. The <b>first start</b> creates a private Python environment in the <code>.venv</code> folder and downloads the libraries it needs. This takes a few minutes and needs internet. Later starts take a few seconds.</li>
+  <li>If the window doesn't appear, run <code>run.bat debug</code> from a command prompt. A console window then stays open and shows any error messages.</li>
+</ol>
+<p>When a new version adds libraries, <code>run.bat</code> notices the changed <code>requirements.txt</code> and installs them automatically on the next start.</p>
+
+<h3 id="install-apps"><a name="install-apps"></a>Stand-alone apps (Windows, macOS, Linux)</h3>
+<p>PlateSolver can also be packaged as an app that runs without Python: <code>PlateSolver.exe</code> (with an optional installer) on Windows, <code>PlateSolver.app</code> on macOS, and a folder or <code>.tar.gz</code> on Linux. The <code>build</code> folder contains a script for each system; see <code>build/README.md</code>. Each app has to be built on its own system, or all three at once with the GitHub workflow included in the project. Every build ends with a self-test of the finished app (<code>PlateSolver --selftest report.txt</code>), which checks that all modules, catalogues, the quiz and the manual are inside. The apps are not code-signed, so Windows and macOS show a warning the first time (Windows: <i>More info › Run anyway</i>; macOS: right-click › <i>Open</i>). ASTAP is installed separately in either case; the <a href="#astap-helper">install helper</a> makes that easy.</p>
+
+<h3 id="install-astap"><a name="install-astap"></a>ASTAP (recommended, local solver)</h3>
+<p>ASTAP is a free, fast plate solver by Han Kleijn that runs on your own computer, without internet. It is separate software with its own licence, so it is not included in PlateSolver: install it with the <a href="#astap-helper">install helper</a> below, or yourself from <a href="https://www.hnsky.org/astap.htm">hnsky.org/astap.htm</a>. You need two things:</p>
+<ul>
+  <li>the <b>ASTAP program</b>, normally into <code>C:\Program Files\astap</code>, and</li>
+  <li>at least one <b>star database</b>. <b>D50</b> suits most telescope images (fields from about 0.2° to 10°). Choose <b>D20</b> or <b>D05</b> for small downloads. For camera lenses and smartphone photos you also need <b>W08</b> (or G05). The <a href="#profiles">profile</a> checklist shows whether the database you need is installed.</li>
+</ul>
+<p>A star database is many files named like <code>d50_0101.1476</code> in the ASTAP folder. You may also keep them in a folder called <code>Database</code> or <code>databases</code> inside the ASTAP folder: PlateSolver finds them there by itself and tells ASTAP where they are. On <b>macOS</b> the database installers put the files in <code>/usr/local/opt/astap</code>, not inside <code>ASTAP.app</code>, and on Linux the packages use <code>/opt/astap</code> (or <code>/usr/share/astap/data</code>); PlateSolver looks there too. (To see that folder in Finder, press <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> and type the path.) Anywhere else, set <i>Star database folder</i>. Keep all databases in one folder, because ASTAP is given only one. PlateSolver finds ASTAP automatically; you can check or change its location in <a href="#settings-solver-astap">Settings › Plate solvers › ASTAP</a>. The page shows a green tick and the databases found.</p>
+
+<h3 id="astap-helper"><a name="astap-helper"></a>The ASTAP install helper</h3>
+<p><b>Tools › Install ASTAP and star databases…</b> (also the first button in <a href="#settings-solver-astap">Settings › Plate solvers › ASTAP</a>) shows what is installed and helps you download the rest. If ASTAP isn't found when PlateSolver starts for the first time, it offers this once; after a failed solve it is offered again (once per session) when the program or a star database is missing.</p>
+<ul>
+  <li><b>Disclaimer.</b> At the top, the window explains that ASTAP and its star databases are third-party software, downloaded from ASTAP's own site (SourceForge, linked from hnsky.org) and installed by their own installers under their own licence terms, and that <b>ASTAP also needs a star database</b>, which is a separate download. Tick <i>I understand…</i> to enable the download buttons; the tick is remembered.</li>
+  <li><b>1 ASTAP program.</b> Shows ✓ and the path when ASTAP is installed, otherwise ✗. <i>Download and install ASTAP</i> downloads the official installer for your system (Windows .exe, macOS .pkg for Apple silicon or Intel, Linux .deb or .rpm) and starts it. Follow the installer's steps and keep the suggested folder. Where there is no single installer (32-bit Windows, other Linux systems) ASTAP's download page opens instead. When ASTAP is already installed, the same button installs the newest version.</li>
+  <li><b>2 Star database (can be done later).</b> The databases are optional and separate: you can install only the program now and come back for a database later. The list shows every database with its use and approximate download size; the one that suits your <a href="#profiles">profile</a> comes first, marked <i>recommended</i> (W08 for phones, W08 and D50 for camera lenses, D50 or D80 for telescopes depending on the field size), and installed ones are marked <i>installed</i>. On Windows and macOS the database comes with its own installer; on Linux as a package, or as a zip file that PlateSolver unpacks into the ASTAP folder (or its own data folder, which it then sets as <i>Star database folder</i>).</li>
+  <li><b>Downloads</b> are saved in your <b>Downloads</b> folder, so you can find an installer and run it again later.</li>
+  <li><b>More than one database on a Mac.</b> Some of ASTAP's Mac database installers share an internal name: the D50 installer uses the same one as D05, and G05 the same one as V50. macOS then treats installing the second as an <i>update</i> of the first and removes the first database's files, so the two keep replacing each other. Before starting a database installer, the helper reads its internal name and checks whether macOS would remove another database. If so, it explains and offers <b>Protect and install</b>: it tells macOS to forget the earlier install (macOS asks for your password; no files are deleted), then starts the installer, so both databases stay. <i>Install anyway</i> skips this. If you install outside PlateSolver, do the same by hand in Terminal before installing the next database: <code>pkgutil --pkgs</code> lists the names, <code>sudo pkgutil --forget d05</code> forgets one. If a database disappears after an install anyway, the helper says so after <b>Check again</b>; install it again to get it back.</li>
+  <li><b>Progress and Cancel.</b> Large databases (D50 is about 900 MB, D80 about 1.2 GB) can take a while; the bar shows how far it has come.</li>
+  <li><b>Check again.</b> Press it after an installer has finished. PlateSolver then finds the new ASTAP and its databases and fills in <i>ASTAP program</i> in Settings if it was empty or wrong. A location you have set yourself is never replaced while it still works.</li>
+  <li>If a download fails (no internet, a firewall, or the download site has changed), ASTAP's download page opens, so you can download it there by hand.</li>
+</ul>
+
+<h3 id="install-astrometry"><a name="install-astrometry"></a>astrometry.net (optional, online solver)</h3>
+<p>astrometry.net can solve almost any image, even with no information at all, but it is slower (usually 1–5 minutes) and needs internet. PlateSolver only uses it when ASTAP is missing or fails. To enable it:</p>
+<ol>
+  <li>Create a free account at <a href="https://nova.astrometry.net">nova.astrometry.net</a>.</li>
+  <li>Open <i>My Profile</i> there and copy your <b>API key</b>.</li>
+  <li>Paste it into <a href="#settings-solver-astrometry_net">Settings › Plate solvers › astrometry.net (online)</a>.</li>
+</ol>
+<p><b>Before anything is uploaded, PlateSolver asks you.</b> The question says exactly what will be sent:</p>
+<ul>
+  <li>a reduced monochrome copy, at most 2000 pixels on the longest side,</li>
+  <li>without the file's information (no date, camera, location or object name); only a rough position and image scale are sent, to speed up solving (switch off with <i>Send position and scale hints</i>),</li>
+  <li>stored <b>privately</b> in your astrometry.net account (not publicly visible).</li>
+</ul>
+<p>Answer <b>Upload</b> or <b>Don't upload</b>. Tick <i>Remember my answer until PlateSolver is closed</i> to avoid being asked for every image in a batch. To never be asked, switch off <i>Ask before uploading an image</i> in the astrometry.net settings. To never upload at all, leave the API key empty.</p>
+<p class="warn">astrometry.net keeps uploaded images in your account; there is no automatic deletion and the service offers no way for programs to delete them. The submission number is shown in the Log tab if you want to ask the site's administrators to remove one.</p>
+
+<!-- ======================================================================= -->
+<h2 id="quickstart"><a name="quickstart"></a>3. Quick start</h2>
+<ol>
+  <li><b>Set up a profile for your equipment</b> once: <b>Tools › Profiles…</b> (<kbd>Ctrl</kbd>+<kbd>P</kbd>), pick a template (for example <i>Astro camera on a telescope</i>), click <i>Make my own profile from this template</i>, choose your camera and enter the focal length. The window shows the resulting image scale (350 mm and 2.9 µm give 1.71″ per pixel) and a checklist of anything else that is still needed, such as a star database. See <a href="#profiles">Equipment profiles</a>, and <a href="#eq-profiles">which profile for which equipment</a> if you're unsure.</li>
+  <li><b>Choose the profile</b> in the toolbar (<b>Profile:</b>). For phone photos, pick a smartphone profile.</li>
+  <li><b>Open an image</b>: <kbd>Ctrl+O</kbd>, the <i>Open</i> button, or drag a file onto the window.</li>
+  <li>Press <b>Solve</b> (<kbd>F5</kbd>). If only part of the image shows sky, <a href="#crop">crop</a> it first (<kbd>C</kbd>). The status bar shows the centre coordinates when done. To solve every image as soon as it opens, switch on <i>Solve automatically when an image is opened</i> in <a href="#settings-general">Settings › General</a>.</li>
+  <li>The <b>Objects</b> tab lists what is in the picture, with distances. Point at an object on the image for its information card; double-click it to read about it.</li>
+  <li><b>Export</b> the annotated picture with <kbd>Ctrl+E</kbd>.</li>
+</ol>
+
+<!-- ======================================================================= -->
+<h2 id="equipment-guide"><a name="equipment-guide"></a>4. Cameras, lenses and telescopes explained</h2>
+<p>This chapter explains the equipment that takes astronomy pictures – phones, cameras, lenses and telescopes – in plain words, and what each means for PlateSolver: which <a href="#profiles">profile</a> to choose and which numbers to fill in. You don't need any of it to get started, but it helps when an image won't solve or you set up your own equipment.</p>
+
+<h3 id="eq-scale"><a name="eq-scale"></a>The one thing PlateSolver needs to know: how much sky one pixel covers</h3>
+<p>To recognise the stars, PlateSolver (and ASTAP behind it) must know roughly how big the stars' pattern is in your picture. That is the <b>image scale</b>: how much sky one pixel covers, in arc-seconds per pixel (″/px). It depends on just two things:</p>
+<ul>
+  <li><b>The focal length</b> of the lens or telescope, in millimetres. A longer focal length magnifies more, so each pixel covers less sky.</li>
+  <li><b>The pixel size</b> of the camera's sensor, in micrometres (µm). Bigger pixels each cover more sky.</li>
+</ul>
+<p class="box">Image scale (″/px) = 206.3 × pixel size (µm) ÷ focal length (mm). Example: 2.9 µm pixels behind a 350 mm telescope give 206.3 × 2.9 ÷ 350 = <b>1.71″ per pixel</b>. Multiply by the number of pixels to get the <b>field of view</b>: 1.71″ × 2160 pixels = 3,700″ ≈ 1.0° high.</p>
+<p>For comparison: the full Moon is about 0.5° (1,800″) across. A telescope image typically covers 0.3–3°, a camera lens 10–60°, and a phone photo 50–110° of sky.</p>
+<p>Everything else – brand, colour or mono, cooled or not, the size of the front lens or mirror (aperture) and the f-number – does not change the image scale. Those matter for how faint you can reach and how long you expose, not for plate solving.</p>
+
+<h3 id="eq-devices"><a name="eq-devices"></a>Imaging devices</h3>
+
+<h4>Smartphones</h4>
+<p>A phone has several small cameras: usually a <b>main</b> camera, an <b>ultra-wide</b> (shown as 0.5×) and sometimes a <b>telephoto</b> (2×, 3×, 5×). Their tiny lenses have real focal lengths of only a few millimetres, so phones describe them as a <b>35 mm-equivalent</b> focal length instead: the lens on a classic full-frame camera that would show the same view. The main camera is typically 24–26 mm equivalent, the ultra-wide 13 mm, telephotos 48–120 mm.</p>
+<ul>
+  <li><b>Profile:</b> <i>Smartphone, main camera (26 mm)</i> or <i>Smartphone, ultra-wide (13 mm)</i>. For an iPhone 14 Pro or newer, make your own profile from the main-camera template and set <i>Lens for photos without EXIF</i> to 24 mm.</li>
+  <li><b>Star database:</b> W08 (fields wider than about 10°).</li>
+  <li>The original photo contains <b>EXIF</b> information (camera model and lens) that PlateSolver reads by itself. Copies sent through messaging apps or exported from editors often lose it; the profile then supplies the lens.</li>
+  <li>Phone photos are wide and their lenses bend straight lines near the edges. PlateSolver corrects this <a href="#distortion">lens distortion</a> by itself, and offers the <a href="#phone-aids">phone and wide-field aids</a> when a photo won't solve. Night modes that stack and sharpen many frames are fine.</li>
+</ul>
+
+<h4>DSLR and mirrorless cameras</h4>
+<p>Both are "system cameras" with interchangeable lenses. A <b>DSLR</b> (digital single-lens reflex) has a <b>mirror</b> inside that reflects the view up into an optical viewfinder and flips out of the way when the picture is taken. A <b>mirrorless</b> camera has no mirror: the sensor is always exposed and you look at an electronic viewfinder or the screen. For astronomy and for PlateSolver they behave the same – what matters is the sensor and the lens or telescope in front of it.</p>
+<ul>
+  <li><b>Sensor size.</b> <i>Full frame</i> is 36 × 24 mm (Canon R, Nikon Z, Sony A7 and similar). <i>APS-C</i> is about 23.5 × 15.6 mm (the "crop factor" is 1.5, or 1.6 for Canon). <i>Micro Four Thirds</i> is 17.3 × 13 mm (crop factor 2). A smaller sensor with the same lens shows a smaller piece of sky.</li>
+  <li><b>With a camera lens:</b> profile <i>DSLR / mirrorless with a camera lens</i>. Each photo's EXIF tells PlateSolver the focal length and camera, even when you zoom, so there is usually nothing to fill in. For old manual lenses that leave no EXIF, set <i>Lens for photos without EXIF</i>.</li>
+  <li><b>On a telescope</b> (the camera body attached with a T-ring, without its lens): profile <i>DSLR / mirrorless on a telescope</i>. Pick the camera body (it fills in the pixel size) and enter the telescope's focal length – the camera can't know it.</li>
+  <li>"Astro-modified" cameras (with the infrared filter removed or replaced) solve exactly like unmodified ones.</li>
+</ul>
+
+<h4>Dedicated astronomy cameras</h4>
+<p>Cameras made for telescopes – ZWO (ASI), QHY, Player One, ToupTek, Atik, Moravian and others – have no lens, viewfinder or screen; they are controlled from a computer or a control box such as the ASIAIR. Many are <b>cooled</b> to reduce noise. <b>Colour</b> cameras record red, green and blue in one go; <b>mono</b> cameras record one filter at a time (L, R, G, B, Hα, OIII, SII), and the colour image is combined later.</p>
+<ul>
+  <li><b>Profile:</b> <i>Astro camera on a telescope</i>. Pick your camera (it fills in the pixel size and sensor size) and enter the telescope's focal length.</li>
+  <li>The FITS files that capture programs (N.I.N.A., ASIAIR, SharpCap, APT, Ekos …) save usually contain the focal length and pixel size, and often the pointing position, in their header. PlateSolver uses those first, so FITS files solve quickly even with a different profile.</li>
+  <li>Processed results (TIFF, JPG, PNG) usually lose that information; then the profile is what counts.</li>
+</ul>
+
+<h4>Smart telescopes</h4>
+<p>All-in-one instruments (for example from ZWO, Vaonis, Unistellar or DWARFLAB) contain a small telescope, camera and computer in one unit and plate solve by themselves while observing. Their FITS files often already contain the solution, which PlateSolver then uses directly (<i>Existing solution in file</i>). For their JPG or PNG results, make an <i>Astro camera on a telescope</i> profile with the focal length and pixel size from the maker's specifications.</p>
+
+<h3 id="eq-optics"><a name="eq-optics"></a>Optics: lenses and telescopes</h3>
+
+<h4>Camera lenses</h4>
+<p>A lens is described by its focal length and its widest aperture as an f-number, for example <i>50 mm f/1.8</i>. Only the focal length matters for PlateSolver. Zoom lenses (e.g. 18–55 mm) record the focal length actually used in the EXIF. Wide-angle lenses (14–35 mm) show the Milky Way and whole constellations; short telephotos (85–200 mm) show large nebulae and star clusters.</p>
+
+<h4>Telescopes</h4>
+<p>A telescope is a lens or mirror system with a long focal length. Its <b>aperture</b> (the diameter of the main lens or mirror, e.g. 71 mm or 200 mm) decides how much light it collects; its <b>focal length</b> (e.g. 350 mm or 2000 mm) decides the image scale; the <b>focal ratio</b> f/ is focal length ÷ aperture (350 ÷ 71 ≈ f/4.9).</p>
+<table>
+<tr><th>Kind</th><th>How it works</th><th>Typical focal length</th><th>Image orientation</th></tr>
+<tr><td><b>Refractor</b> (including small astrographs such as the RedCat)</td><td>Lenses only</td><td>250–1000 mm</td><td>Normal (only rotated)</td></tr>
+<tr><td><b>Newtonian reflector</b></td><td>Main mirror plus a small flat mirror that sends the light out of the side of the tube</td><td>400–1200 mm</td><td>Normal (two mirrors: only rotated)</td></tr>
+<tr><td><b>Schmidt-Cassegrain (SCT), Maksutov, Ritchey-Chrétien</b></td><td>Two mirrors fold a long focal length into a short tube</td><td>1000–4000 mm</td><td>Normal (only rotated)</td></tr>
+<tr><td><b>RASA, HyperStar</b> (camera at the front of the tube)</td><td>One mirror, the camera sits where the small mirror would be</td><td>400–800 mm</td><td><b>Mirrored</b> (one reflection)</td></tr>
+</table>
+
+<h4>Reducers, flatteners and Barlow lenses</h4>
+<p>Extra optics between telescope and camera change the focal length. A <b>focal reducer</b> (e.g. 0.8× or 0.63×) shortens it: 1000 mm × 0.8 = 800 mm, a wider view. A <b>Barlow lens</b> (2×, 3×) lengthens it. A <b>field flattener</b> only straightens the field and leaves the focal length unchanged (×1.0). Always enter the <b>effective</b> focal length – the telescope's focal length times the reducer's or Barlow's factor. If you're unsure, solve one image and read the actual scale in the Solution tab (see <a href="#eq-unknown">below</a>).</p>
+
+<h4>Binning, drizzle, cropping and resizing</h4>
+<ul>
+  <li><b>Binning</b> 2×2 combines four pixels into one: each pixel is twice as big, so the image scale doubles. Capture programs record this in FITS files.</li>
+  <li><b>Drizzle</b> (in stacking programs) does the opposite: a 2× drizzled image has twice as many pixels and half the scale. PlateSolver recognises drizzled images by their size (<a href="#settings-equipment">Equipment › Recognise drizzled images by their size</a>).</li>
+  <li><b>Cropping</b> keeps the scale – it only removes the edges. <b>Resizing</b> changes it. When the scale is unknown or changed, ASTAP retries with any scale by itself.</li>
+</ul>
+
+<h3 id="eq-profiles"><a name="eq-profiles"></a>Which profile for which equipment</h3>
+<table>
+<tr><th>You took the picture with …</th><th>Profile template</th><th>Fill in</th><th>Star database</th></tr>
+<tr><td>A phone, normal (1×) camera</td><td>Smartphone, main camera (26 mm)</td><td>Nothing (24 mm for iPhone 14 Pro and newer)</td><td>W08</td></tr>
+<tr><td>A phone, ultra-wide (0.5×)</td><td>Smartphone, ultra-wide (13 mm)</td><td>Nothing</td><td>W08 (astrometry.net helps)</td></tr>
+<tr><td>A DSLR or mirrorless camera with its lens, also on a tracker</td><td>DSLR / mirrorless with a camera lens</td><td>Nothing (from EXIF); old manual lenses: <i>Lens for photos without EXIF</i></td><td>W08; D50 for 135 mm and longer</td></tr>
+<tr><td>A DSLR or mirrorless camera on a telescope</td><td>DSLR / mirrorless on a telescope</td><td>Camera body, effective focal length</td><td>D50 (D80 for very long focal lengths)</td></tr>
+<tr><td>An astronomy camera on a telescope or lens</td><td>Astro camera on a telescope</td><td>Camera, effective focal length</td><td>D50 (D80 for very long focal lengths)</td></tr>
+<tr><td>A smart telescope</td><td>Astro camera on a telescope (for JPG/PNG)</td><td>Focal length and pixel size from the specifications</td><td>D50</td></tr>
+<tr><td>Unknown equipment</td><td>Astro camera on a telescope, nothing filled in</td><td>Nothing – see below</td><td>D50</td></tr>
+<tr><td>A phone photo of a <b>screen or print</b> showing stars (a tablet, monitor or printout)</td><td>Photo of a screen or print</td><td>Nothing; optionally the height of the sky shown on the screen – see <a href="#screen-photos">below</a></td><td>The one for the telescope that took the picture on the screen (often D50)</td></tr>
+</table>
+<p>The Profiles window (<b>Tools › Profiles…</b>) shows the resulting image scale and field of view, and a checklist of anything still missing, such as the right star database. The <a href="#astap-helper">ASTAP install helper</a> recommends the database for your profile.</p>
+
+<h3 id="eq-unknown"><a name="eq-unknown"></a>When you don't know the focal length or pixel size</h3>
+<p>Leave them empty rather than guessing: a wrong scale is the most common reason an image won't solve. With nothing filled in, ASTAP tries image heights from about 10° down to 0.3°, which covers almost every telescope, and astrometry.net (if set up) can solve without any information. A hint helps a lot: <b>Image › Solve with object hint</b> and the object's name, e.g. <i>M 31</i>. After solving, the <b>Solution</b> tab shows the real image scale. If you know the pixel size, the focal length follows: focal length (mm) = 206.3 × pixel size (µm) ÷ scale (″/px). Make a profile with it, and the next images solve in seconds.</p>
+
+<h3 id="screen-photos"><a name="screen-photos"></a>Photos of a screen or a print</h3>
+<p>Sometimes the only picture you have is a phone photo of a screen: a live view in ASIAIR, N.I.N.A., SharpCap or a smart-telescope app on a tablet or laptop, a friend's monitor, or a printout. The stars in such a photo were imaged through the <i>telescope</i>, but the photo's EXIF describes the <i>phone</i>, so a phone profile would tell the solver the field is 60–70° high when it is really a degree or less – and solving fails. Choose the template <b>Photo of a screen or print</b> (in the toolbar, or make your own from it in Tools › Profiles…). It:</p>
+<ul>
+  <li><b>ignores the photo's lens information</b> and lets the solver find the scale itself (ASTAP's automatic scale). This is slower, so an object hint – <b>Image › Solve with object hint</b> with the object's name – helps most;</li>
+  <li><b>stays chosen</b>: the phone's EXIF does not switch to a smartphone profile;</li>
+  <li>tries a <b>softened copy</b> of the photo if it doesn't solve as it is. This smooths <i>moiré</i> – the wavy pattern a camera picks up from screen pixels – and JPEG blocks; the phone aids are not used;</li>
+  <li><b>skips lens distortion correction</b>: the stretch in such a photo comes from the viewing angle, not from a lens.</li>
+</ul>
+<p><b>Height of the sky shown</b> (optional): if you know how much sky the screen shows – for example from your telescope and camera (see <a href="#eq-scale">image scale</a>) – make your own profile and enter it in degrees. The solver then searches with that field instead of trying every scale. Measure the height of the <i>star area</i> only, as shown on the screen.</p>
+<p><b>Tips:</b> photograph the screen straight on and fill the frame with the star area; crop away menus, buttons and text before solving (they are not stars and confuse the solver) – PlateSolver's own <a href="#crop">Crop and rotate</a> (<kbd>C</kbd>) does this without changing the photo; turn off the screen's night or red mode if you can; avoid reflections. The solution then applies to the cropped photo. Labels on a photo of a screen are positioned as well as the viewing angle allows, so they can be a little off near the edges.</p>
+
+<h3 id="eq-mirrored"><a name="eq-mirrored"></a>Rotated, mirrored and upside-down images</h3>
+<p>Telescope images are almost never "north up": the camera's angle on the telescope decides how the picture is turned, and that's fine. Some setups also show the sky <b>mirrored</b> – as if seen in a mirror:</p>
+<ul>
+  <li>systems with <b>one reflection</b>, such as RASA and HyperStar, or a camera behind a <b>star diagonal</b> (normally used for looking through the eyepiece);</li>
+  <li>a phone's <b>front (selfie) camera</b>, or a phone held to an eyepiece with a diagonal;</li>
+  <li>a <b>flip</b> in a capture or editing program (Flip horizontal / Flip vertical), or software that reads a FITS file's rows in the opposite order. A vertical flip is the same as a horizontal flip turned half a turn: also mirrored.</li>
+</ul>
+<p><b>PlateSolver handles all of these by itself – there is nothing to set.</b> The solvers (ASTAP, astrometry.net) recognise the star pattern whether it is rotated or mirrored, and the solution records both. The Solution tab shows the rotation (<i>Up = … ° E of N</i>) and <b>Mirrored: Yes/No</b>; labels, the compass (N and E arrows), the grid, constellations, lens distortion correction and the visible-stars check all follow the solution, so they are correct on mirrored images too. In a mirrored image the compass shows east on the "wrong" side of north compared with a normal sky view – that is the sign that the picture is mirrored, not an error. PlateSolver shows your image exactly as the file stores it; if you prefer it the right way round, flip it in your image editor, and PlateSolver will solve the flipped copy just as well.</p>
+
+<h3 id="eq-glossary"><a name="eq-glossary"></a>Words you'll come across</h3>
+<table>
+<tr><th>Word</th><th>Meaning</th></tr>
+<tr><td>Plate solving</td><td>Finding where in the sky a picture points, and how it's scaled and turned, by matching its stars with a star catalogue.</td></tr>
+<tr><td>Focal length</td><td>How strongly a lens or telescope magnifies, in mm. Longer = more magnified, smaller piece of sky.</td></tr>
+<tr><td>Aperture</td><td>Diameter of the main lens or mirror, in mm. Bigger = more light, fainter objects.</td></tr>
+<tr><td>Focal ratio, f-number</td><td>Focal length ÷ aperture (f/4, f/7 …). Lower = brighter image, shorter exposures.</td></tr>
+<tr><td>Pixel size</td><td>Size of one light-sensitive element on the sensor, in µm (micrometres, thousandths of a millimetre).</td></tr>
+<tr><td>Image scale</td><td>How much sky one pixel covers, in ″/px (arc-seconds per pixel).</td></tr>
+<tr><td>Field of view</td><td>How much sky the whole picture covers, in degrees (°) or arc-minutes (′). 1° = 60′ = 3,600″.</td></tr>
+<tr><td>35 mm equivalent, crop factor</td><td>A lens's view described as the focal length that would give the same view on a full-frame camera; the crop factor converts between sensor sizes.</td></tr>
+<tr><td>EXIF</td><td>Information a camera or phone stores in its JPG/HEIC photos: model, lens, focal length, date, sometimes location.</td></tr>
+<tr><td>FITS header</td><td>Information astronomy software stores in a FITS file: telescope, camera, pixel size, focal length, exposure, pointing, and after solving the sky coordinates.</td></tr>
+<tr><td>Binning, drizzle</td><td>Combining pixels (bigger pixels, coarser scale) or the reverse in stacking (more pixels, finer scale).</td></tr>
+<tr><td>Star database</td><td>The catalogue ASTAP compares your stars with (D50, D80, W08 …), chosen to suit the field of view.</td></tr>
+<tr><td>Mirrored image</td><td>A picture that shows the sky as in a mirror, from an odd number of reflections or a flip in software.</td></tr>
+</table>
+
+<!-- ======================================================================= -->
+<h2 id="window"><a name="window"></a>5. The main window</h2>
+<h3 id="window-image"><a name="window-image"></a>The image</h3>
+<ul>
+  <li><b>Zoom</b> with the mouse wheel (it zooms towards the mouse pointer), or <kbd>Ctrl +</kbd> / <kbd>Ctrl −</kbd>. <kbd>F</kbd> fits the image to the window, <kbd>1</kbd> shows it at 100 %.</li>
+  <li><b>Move</b> the image by dragging it.</li>
+  <li><b>Crop and rotate</b> (<kbd>C</kbd>) solves only part of the image, without changing the file. See <a href="#crop">Crop and rotate</a>.</li>
+  <li><b>Point</b> at an object to see its information card. <b>Click</b> an object to select it (it is circled in blue and highlighted in the list). <b>Double-click</b> it to open its Wikipedia or SIMBAD page. <b>Right-click</b> it for all links and copy options.</li>
+  <li>Double-clicking empty sky fits the image to the window.</li>
+</ul>
+<p>Labels keep the same size on screen at every zoom level. In crowded fields, less prominent labels are hidden so they don't overlap; zoom in and they appear.</p>
+
+<h3 id="crop"><a name="crop"></a>Crop and rotate</h3>
+<p>Sometimes only part of an image should be solved: the star area of a <a href="#screen-photos">photo of a screen</a> without the app's menus and text, a photo with a tree or a roof in it, or a stack with ragged, empty edges. <b>Crop and rotate</b> (toolbar, <b>Image › Crop and rotate</b> or <kbd>C</kbd>) changes the image <i>shown in PlateSolver</i> – your file is never changed.</p>
+<ol>
+  <li>Click <b>Crop and rotate</b>. A bar appears above the image.</li>
+  <li><b>Rotate</b> first if it helps you line up the selection: the <b>90°</b> buttons turn the image a quarter turn anticlockwise or clockwise (<kbd>[</kbd> and <kbd>]</kbd>), and <b>Straighten</b> turns it a little, up to 45° either way – for example to line up a photographed screen with the edges. New corners are filled with the sky colour.</li>
+  <li><b>Drag a rectangle</b> around the part you want. Drag inside it to move it, drag an edge or a corner to resize it, or drag outside it to start again. The size is shown at its corner; everything outside is darkened. The mouse wheel zooms, and the right mouse button moves the image while you select.</li>
+  <li><b>Apply and solve</b> (<kbd>Enter</kbd>) shows only the selection and plate solves it. <b>Apply</b> shows it without solving, <b>Reset</b> undoes the rotation and the selection, and <b>Cancel</b> (<kbd>Esc</kbd>) leaves everything as it was.</li>
+</ol>
+<p>The edited view is then used like any image: solved, labelled, listed and exported. The Solution tab and the Log say that it is an edited view, and exports get <i>_edited</i> in their suggested file names. You can crop again to narrow it further. <b>Original image</b> in the toolbar (<b>Image › Back to the original image</b>, <kbd>Shift</kbd>+<kbd>C</kbd>) shows the whole image again; solve it again after that (<kbd>F5</kbd>).</p>
+<ul>
+  <li>Cropping and rotating don't change how much sky a pixel covers, so your profile and the image's own scale information still apply. Plate solvers find the stars at any angle, so rotating isn't needed for solving – it's only there to make the selection easier.</li>
+  <li>A plate solution stored in a FITS or XISF file no longer fits the edited pixels, so the edited view is solved again. For the same reason <b>Write plate solution into this FITS file</b> is not available for an edited view; a saved <i>.wcs</i> file describes the edited view.</li>
+  <li>A selection needs at least 32 × 32 pixels. Keep it as large as the unwanted parts allow: the more stars it holds, the easier it solves.</li>
+</ul>
+
+<h3 id="window-sidebar"><a name="window-sidebar"></a>The sidebar</h3>
+<table>
+<tr><th>Tab</th><th>Contents</th></tr>
+<tr><td><b>Objects</b></td><td>The objects in the image: name, distance, true size and type. See <a href="#objects">section 7</a>.</td></tr>
+<tr><td><b>Solution</b></td><td>Details of the image (size, format, pointing hints) and the plate solution: centre RA/Dec, constellation, field of view, image scale, rotation and whether the image is mirrored. If solving failed, this tab shows what each solver reported.</td></tr>
+<tr><td><b>Log</b></td><td>Everything the program did, with times. Useful when something goes wrong.</td></tr>
+</table>
+
+<h3 id="window-status"><a name="window-status"></a>The status bar</h3>
+<p>Shows what the program is doing. On the right: the pixel position and <b>RA/Dec under the mouse pointer</b> (after solving) and the zoom level.</p>
+
+<!-- ======================================================================= -->
+<h2 id="opening"><a name="opening"></a>6. Opening images</h2>
+<table>
+<tr><th>Format</th><th>Notes</th></tr>
+<tr><td><b>FITS</b> (.fits, .fit, .fts)</td><td>Mono, colour and raw one-shot-colour frames. Raw colour frames (with a <code>BAYERPAT</code> keyword) are shown in colour with a simple debayer. Pointing, focal length and pixel size are read from the usual header keywords (<code>RA</code>, <code>DEC</code>, <code>OBJCTRA</code>, <code>OBJCTDEC</code>, <code>FOCALLEN</code>, <code>XPIXSZ</code>, …). If the file is already plate solved, that solution is used immediately.</td></tr>
+<tr><td><b>XISF</b> (.xisf)</td><td>PixInsight's own format: integer or floating-point, mono or colour, compressed or not. FITS keywords and PixInsight's metadata are read as solving hints: position (<code>OBJCTRA</code>/<code>OBJCTDEC</code>, the observation centre), focal length, pixel size and camera name (which can choose your <a href="#profiles">profile</a> automatically). A plate solution stored by PixInsight's ImageSolver is used as an exact position and scale hint, so the image is re-solved in seconds. Integration and drizzle outputs keep this information; an image created by PixelMath or other processes as a <i>new</i> image usually doesn't, but the file name (e.g. <code>FINAL_PELICAN_IC5070.xisf</code>) still gives an <a href="#object-hints">object hint</a>. Opening an XISF is usually more reliable than solving the Photoshop JPG made from it.</td></tr>
+<tr><td><b>TIFF</b> (.tif, .tiff)</td><td>8, 16 and 32-bit, as exported by stacking software. 16/32-bit TIFFs are treated as unstretched by default (see <a href="#settings-loader-tiff">TIFF settings</a>).</td></tr>
+<tr><td><b>JPEG / PNG / HEIC</b></td><td>Already-processed pictures, including iPhone photos in HEIC format. For camera and phone photos the image scale is worked out from the EXIF data (see <a href="#widefield">Wide-field images</a>). Photos sent through messaging apps usually lose their EXIF data and are shrunk and recompressed, which makes them much harder to solve: use the original file. For telescope images without EXIF, fill in <a href="#settings-equipment">Equipment</a>.</td></tr>
+</table>
+<h3 id="stretch"><a name="stretch"></a>Unstretched (linear) images</h3>
+<p>Data straight from the camera or a stacker looks almost black. PlateSolver brightens it for display with an automatic stretch; the original data is used for solving. The stretch strength is set in <a href="#settings-general">General</a>.</p>
+<h3 id="roworder"><a name="roworder"></a>Which way up?</h3>
+<p>The FITS standard stores the bottom row first, but some capture programs store the top row first and say so with the <code>ROWORDER</code> keyword. PlateSolver follows that keyword. If your images appear upside down compared with other software, change <a href="#settings-loader-fits">FITS › Row order</a>. Solving and labels are always correct either way; only the display orientation changes. Mirrored and rotated images are explained in <a href="#eq-mirrored">Rotated, mirrored and upside-down images</a>.</p>
+
+<!-- ======================================================================= -->
+<h2 id="solving"><a name="solving"></a>7. Plate solving</h2>
+<p>Solving compares the pattern of stars in your image with a star catalogue. The result is a <b>WCS</b> (World Coordinate System): a formula that turns any pixel into sky coordinates and back. It gives the image centre, scale (arc-seconds per pixel), field of view, rotation and whether the image is mirrored.</p>
+
+<h3 id="solver-order"><a name="solver-order"></a>Which solver is used</h3>
+<p>Solvers are tried in order until one succeeds:</p>
+<ol>
+  <li><b>Existing solution in file</b>: FITS files that were already plate solved (by PlateSolver, ASTAP, N.I.N.A., …) are used as they are. Instant.</li>
+  <li><b>ASTAP</b>: local and fast, usually a few seconds.</li>
+  <li><b>astrometry.net</b>: online, slower, but solves almost anything. Only used when it has an API key.</li>
+</ol>
+<p>The Solution tab shows which solver succeeded, and what the others reported if they failed.</p>
+
+<h3 id="hints"><a name="hints"></a>Hints make solving fast</h3>
+<p>A solver that knows roughly where to look and how large the field is finishes in seconds. Without hints it must search the whole sky ("blind solving"), which takes much longer.</p>
+<ul>
+  <li><b>Image scale</b> comes from focal length × pixel size: <code>scale [″/px] = 206.265 × pixel size [µm] ÷ focal length [mm]</code>. It is read from the FITS header or a camera photo's EXIF data, or taken from your <a href="#profiles">profile</a> (<a href="#settings-equipment">Settings › Equipment</a>) when the file doesn't say. Drizzled images are recognised by their size (see <a href="#object-hints">Drizzled images</a>), and phone photos without EXIF use the profile's lens (see <a href="#widefield">Wide-field images</a>).</li>
+  <li><b>Position</b> (RA/Dec) comes from the FITS header, written by the capture software from the mount's position, or from an <a href="#object-hints">object hint</a> (the file name, or what you type).</li>
+</ul>
+<p>After solving, PlateSolver compares the expected scale with the measured one. If they differ by more than 5 %, the <b>Scale check</b> line in the Solution tab explains where the wrong value came from. It also recognises typical causes such as 2×2 binning or a drizzled image.</p>
+
+<h3 id="profiles"><a name="profiles"></a>Equipment profiles</h3>
+<p>A <b>profile</b> holds everything that depends on your camera: focal length, pixel size, sensor size, drizzle detection, the lens to assume for phone photos without EXIF, and the ASTAP field and database options. Pick a profile in the toolbar (<b>Profile:</b>) and all of these are set at once.</p>
+<ul>
+  <li><b>Templates</b> to start from: <i>Astro camera on a telescope</i>, <i>DSLR / mirrorless on a telescope</i>, <i>DSLR / mirrorless with a camera lens</i>, <i>Smartphone, main camera (26 mm)</i>, <i>Smartphone, ultra-wide (13 mm)</i> and <i>Photo of a screen or print</i> (see <a href="#screen-photos">Photos of a screen or a print</a>).</li>
+  <li><b>Your own profiles</b>: <b>Tools › Profiles…</b> (<kbd>Ctrl</kbd>+<kbd>P</kbd>), choose a template, click <i>Make my own profile from this template</i>, give it a name (e.g. "Redcat 71 + ASI585MC Pro"), pick your camera and enter the focal length.</li>
+  <li><b>Camera list.</b> Astro cameras are grouped by manufacturer: ZWO, Player One, QHYCCD, Svbony, Altair, Atik, Moravian and ToupTek, plus <i>Other brand – by sensor</i> for any camera with a known sensor (IMX585, IMX571, IMX533, …). Choosing a camera fills in its pixel size and resolution. DSLR/mirrorless bodies and phone lenses have their own lists. If your camera isn't listed, choose "none" and enter the values yourself.</li>
+  <li><b>Automatic choice.</b> When an image is opened, its metadata can pick the profile: a FITS whose camera (INSTRUME) matches one of your profiles uses that profile; a photo with Apple, Samsung, Google … EXIF uses a smartphone profile; a camera photo with lens data uses a camera-lens profile. An image without any camera information uses the profile <i>you</i> chose in the toolbar, so an automatic switch never sticks. When you have chosen a <i>Photo of a screen or print</i> profile, no automatic switch is made: such photos carry the phone's EXIF. The Log says when the profile changes. Settings: <a href="#settings-profiles">Settings › Profiles</a>.</li>
+</ul>
+<p><b>Checklist.</b> For each profile, the Profiles window shows <i>Before you solve with this profile</i>: what else is needed, checked against what is actually installed and set. ✓ means done, ⚠ means still needed, • is advice. For example: a telescope profile needs the focal length, the pixel size and a D50/D80 database; a smartphone profile needs ASTAP's W08 database, and for ultra-wide photos astrometry.net. Missing items are also written to the Log (<i>Profile needs: …</i>) when you pick a profile, and shown in the toolbar tooltip. The field of view height and star database are left on automatic by every profile, so you don't need to set them by hand.</p>
+<p>Your Equipment settings from before profiles existed were kept as the profile "My telescope (… mm, … µm)"; rename it in Tools › Profiles…. Changing values in Settings › Equipment directly still works; <i>Take values from current settings</i> copies them into a profile.</p>
+
+<h3 id="object-hints"><a name="object-hints"></a>Object hints: "this is M101"</h3>
+<p>JPG, PNG and most TIFF images, and XISF images that PixInsight created as new images (e.g. with PixelMath), don't say where in the sky they were taken, so the solver has to search the whole sky. If you know what the image shows, tell PlateSolver: the solver then only searches near that object, which is much faster and far more reliable.</p>
+<ul>
+  <li><b>From the file name.</b> Catalogue names like <code>M101_final.jpg</code>, <code>NGC7380_stars.tif</code>, <code>IC1396.jpg</code> or <code>Sh2-155.jpg</code>, and common names from the built-in catalogue like <code>crescent_final.jpg</code>, <code>North_America.tif</code> or <code>Andromeda.jpg</code>, are recognised automatically. The Log says which object was assumed.</li>
+  <li><b>Image › Solve with object hint…</b> (<kbd>Shift</kbd>+<kbd>F5</kbd>): type an object name (M101, NGC 7380, Pleiades, Wizard Nebula) or coordinates (<code>14 03 12.6 +54 20 56</code>, or <code>210.80 54.35</code> in degrees).</li>
+  <li><b>When solving fails</b>, PlateSolver asks whether you know what the image shows.</li>
+</ul>
+<p>Names are looked up in the built-in catalogue (Messier, NGC, IC and common names, offline) and otherwise in SIMBAD (online). The object doesn't have to be in the centre of the image.</p>
+<p><b>Drizzled images.</b> Drizzle integration (for example in PixInsight or Siril) makes the image 1.5, 2 or 3 times larger than the sensor, so each pixel covers that much less sky. Enter your camera's <i>sensor width and height</i> in <a href="#settings-equipment">Equipment</a> (3840 × 2160 for an ASI585MC). An image clearly larger than the sensor is then treated as drizzled, and the scale is divided accordingly; the Solution tab says so.</p>
+<p><b>Cropped and resized images.</b> Cropping alone keeps the image scale (each pixel still covers the same patch of sky), and PlateSolver already accounts for the smaller image. But a crop that was then resized, a drizzled or binned stack, or an image taken with other equipment has a different scale from your <a href="#settings-equipment">Equipment</a> settings. Near a hinted object, ASTAP therefore also tries any image scale, which is quick there. If the hint was wrong, the whole sky is searched as usual. astrometry.net gets a wide scale range (¼ to 4× the Equipment value) instead of a fixed one.</p>
+<p>Settings: <a href="#settings-hints">Settings › Object hints</a>.</p>
+
+<h3 id="starless"><a name="starless"></a>Starless images</h3>
+<p>Plate solving works by matching star patterns, so an image without stars cannot be solved. That includes starless versions made with StarNet or StarXTerminator. Before solving, PlateSolver therefore counts the stars in the image, which takes well under a second. Only compact points of light count: nebula detail is too broad and hot pixels are too sharp to be taken for stars.</p>
+<ul>
+  <li>The number found is shown in the Solution tab as <b>Stars found</b>.</li>
+  <li>If there are fewer than 15 (adjustable), a warning appears: <b>Solve anyway</b> tries all the solvers as usual, <b>Don't solve</b> stops straight away.</li>
+  <li>In batch mode nothing is asked: such images are listed as <i>skipped</i> (or tried anyway, if you turn that off).</li>
+  <li>Images that already contain a plate solution are not checked: they open solved regardless of stars.</li>
+</ul>
+<p>Settings: <a href="#settings-star_check">Settings › Star check</a>. Tip: solve the version of your image that still has its stars.</p>
+
+<h3 id="uneven"><a name="uneven"></a>Non-flattened images, gradients and hot pixels</h3>
+<p>Some images have plenty of stars and still fail to solve. Common reasons:</p>
+<ul>
+  <li>no flat-field correction, leaving dark corners (vignetting) and dust donuts,</li>
+  <li>strong gradients from light pollution or the Moon,</li>
+  <li>no dark frames, leaving many hot pixels that look like stars to a solver.</li>
+</ul>
+<p>PlateSolver can give the solvers a <b>cleaned copy</b> of the image instead. Its background is flattened, by dividing out a smooth background model like a synthetic flat, and isolated hot pixels are removed. Star positions stay exactly where they are, so the solution is valid for your original image. Your image and its display are never changed.</p>
+<ul>
+  <li>The Solution tab shows how much the <b>background</b> varies across the image. Above about 20 % it is marked as uneven.</li>
+  <li>In the default <b>Automatic</b> mode, a clearly uneven raw (unstretched) image is solved from the cleaned copy first, then as it is. A processed image (JPG, PNG, stretched TIFF or XISF) is always tried as it is first: a large nebula or galaxy can make it look uneven even though its background is fine. Otherwise ASTAP gets a second try with the cleaned copy if the first fails.</li>
+  <li>When the cleaned copy did the job, the Solution tab says so.</li>
+</ul>
+<p>Settings: <a href="#settings-solve_prep">Settings › Solving aids</a>. Calibrating with flats and darks (or a stacker that does) is still the best fix for your final images.</p>
+
+<h3 id="widefield"><a name="widefield"></a>Wide-field and Milky Way images</h3>
+<p>Photos taken with a camera lens (14–135 mm) cover tens of degrees of sky. They usually contain hundreds of stars and are perfectly solvable, but they need different treatment from telescope images:</p>
+<ul>
+  <li><b>The right star database.</b> ASTAP's D50 database is made for fields up to about 10°. For wider fields ASTAP needs <b>W08</b> (or G05). Download it from <a href="https://www.hnsky.org/astap.htm">hnsky.org/astap.htm</a> and unpack it into the ASTAP folder. With <i>Star database</i> set to <i>Automatic</i> in <a href="#settings-solver-astap">Settings › ASTAP</a>, PlateSolver then selects W08/G05 by itself for fields wider than about 10°. If it is missing, the Log says so when solving fails.</li>
+  <li><b>The scale comes from the camera.</b> For JPGs and TIFFs, PlateSolver reads the focal length and sensor size from the camera's EXIF data (or the 35 mm-equivalent focal length). This is also correct after the picture was resized. Your <a href="#settings-equipment">Equipment</a> values describe your telescope and are <i>not</i> mixed with a lens's focal length: a 24 mm lens with a 2.9 µm telescope camera's pixel size would give a scale 100 times too fine. When a value in the file doesn't match your equipment, the Solution tab says it was not combined.</li>
+  <li><b>No EXIF?</b> Exported or edited JPGs (and photos saved by apps such as Picasa or sent through messaging apps) often lose it. Choose a <a href="#profiles">smartphone profile</a>: it assumes the phone's main camera (26 mm equivalent; use 24 mm in your own profile for an iPhone 14 Pro or newer). For a camera lens, set <i>Lens without EXIF</i> in your own camera-lens profile. As a last resort, enter the field height under <a href="#settings-solver-astap">ASTAP › Field of view height</a> and set it back to 0 afterwards. ASTAP wants the height worked out from the scale at the centre of the image, which for wide lenses is larger than the true angle: about 57° for a 24 mm lens on full frame in landscape, about 76° for a phone's 26 mm main camera in portrait (57° in landscape).</li>
+  <li><b>Bright Milky Way.</b> The glowing band is a strong, uneven background. The <a href="#uneven">cleaned copy</a> flattens it, so leave <i>Solving aids</i> on Automatic (or set Flatten to Always).</li>
+  <li><b>Lens distortion</b> and very wide angles (fisheye, below about 14 mm) can still defeat solvers. The <a href="#phone-aids">phone and wide-field aids</a> then solve the less distorted centre of the photo. astrometry.net, which handles distortion well, is another option.</li>
+</ul>
+
+<h3 id="phone-aids"><a name="phone-aids"></a>Phone photos that won't solve: phone and wide-field aids</h3>
+<p>A phone's very wide lens stretches the star patterns more and more towards the edges of the photo, so the patterns there no longer match the solver's catalogue. Phone photos also often have trees or houses along the bottom, a strong light-pollution gradient, noisy pixels and JPEG compression. When every normal attempt has failed, PlateSolver can make a last try with its <b>phone and wide-field aids</b>.</p>
+<p><b>You are asked first.</b> When a JPG, HEIC, PNG or TIFF image can't be solved, PlateSolver asks <i>Was it taken with a mobile phone, or another camera with a very wide lens?</i> If the camera information shows a phone (for example <i>camera: Apple iPhone 13</i>) or the file is a HEIC, the question says so. Answer <b>Yes, try the phone aids</b> to go ahead, or <b>No</b> to stop. Telescope images in FITS or XISF format are not asked about, unless their field is wider than 5°.</p>
+<p>What the aids do, on a copy (your image is never changed):</p>
+<ol>
+  <li><b>Foreground blacked out.</b> Dark silhouettes (trees, buildings, hills) and lit, starless ground along the edges of the photo are found and painted over, so lights and branches are not mistaken for stars. Open sky, including the bright Milky Way, is left alone because it is full of stars.</li>
+  <li><b>Cleaned up.</b> The light-pollution gradient is flattened, hot pixels are removed and JPEG blocks are smoothed (more strongly for very compressed files, for example photos sent through a messaging app).</li>
+  <li><b>Only the centre is solved.</b> The centre of a phone photo is hardly distorted. By default the middle 50 % (in each direction) is tried first, then the middle 30 %. The expected field size is reduced to match, so the scale stays right.</li>
+  <li><b>2 × 2 pixels combined</b> in large parts (over 2000 pixels) and in strongly compressed JPGs: clearer stars from noisy phone sensors, fewer false "stars" from JPEG blocks, and faster. Never below 600 pixels on the short side, since ASTAP needs enough pixels to work with.</li>
+  <li><b>Mapped back.</b> The solution of the centre is converted to the whole photo, so labels and the grid land in the right place everywhere.</li>
+  <li><b>Refined.</b> Now that the position and scale are known exactly, PlateSolver makes one quick try (about a second) on the whole photo, then on the middle 75 %. With strong lens distortion, as in most phone photos, these usually don't solve, and that's expected.</li>
+  <li><b>Lens distortion corrected.</b> Finally the stars in the whole photo are paired with PlateSolver's own star catalogue and the lens distortion is measured and taken into account, so the labels sit on their stars right out to the corners. See <a href="#distortion">Labels on their stars: lens distortion</a>. If that isn't possible (too few stars), the centre's solution is used as it is, and labels near the edges may be slightly off.</li>
+</ol>
+<p>The Solution tab and the Log say which part solved, e.g. <i>Solved with the phone and wide-field aids (…, middle 50 %, 2×2 pixels combined). The whole photo was then solved near that position.</i></p>
+<p><b>Not only for phones.</b> Processed telescope images that won't solve as a whole (for example a JPG whose star pattern was changed by stretching, star reduction or warping) can still solve from their centre. Answer <i>Yes</i> to the question for those too: in testing, a drizzled and processed JPG of the Crescent Nebula that no other attempt could solve was solved this way.</p>
+<p><b>Why not rotate the image?</b> Rotating by 90°, 180° or 270° does not help: the solvers compare star patterns in a way that doesn't depend on rotation (or mirroring), so a rotated photo fails for exactly the same reason.</p>
+<p>Tips:</p>
+<ul>
+  <li>Install ASTAP's <b>W08</b> star database: the centre of a phone photo is still 20–40° wide.</li>
+  <li>Choose a <a href="#profiles">smartphone profile</a> (or a camera-lens profile), so the expected scale is right.</li>
+  <li>Use the original photo from the phone. A copy sent through a messaging app or social media is resized and strongly compressed, which leaves few usable stars.</li>
+  <li>Night mode and long exposures help: more stars make solving easier.</li>
+</ul>
+<p>Settings: <a href="#settings-phone_aids">Settings › Phone and wide-field aids</a>. <i>When nothing else solves the image</i> can be <b>Ask</b> (default), <b>Try automatically</b> (also used in batch mode, where nobody is asked) or <b>Never</b>. You can also choose which parts are tried, and switch the foreground mask, the 2 × 2 binning and the refining step on or off.</p>
+
+<h3 id="distortion"><a name="distortion"></a>Labels on their stars: lens distortion</h3>
+<p>A plate solution maps every pixel to a position in the sky using the model of an ideal lens, where straight lines stay straight. Real wide-angle lenses, and phone lenses in particular, bend the picture slightly, more and more towards the edges. Phones correct most of this before saving the photo, but 1–2 % usually remains: on a 12-megapixel photo that is 30–80 pixels in the corners. A solution found only from the centre of a photo (the <a href="#phone-aids">phone aids</a>) also carries tiny scale and rotation errors outwards. The result: labels sit right in the middle but drift off their stars towards the edges.</p>
+<p>PlateSolver therefore checks wide-field solutions against its own star catalogue:</p>
+<ol>
+  <li>It finds the stars in the photo (their centres to a fraction of a pixel).</li>
+  <li>It pairs them with catalogue stars, starting in the centre, where the solution is right, and working outwards ring by ring, so each pairing is unambiguous even where the labels were far off.</li>
+  <li>It fits the lens distortion with SIP polynomials, the FITS standard used by astrometry.net and professional observatories, and refits as more of the photo is covered.</li>
+</ol>
+<p>The Solution tab and the Log then say, for example, <i>Lens distortion corrected using 640 catalogue stars (accuracy 0.4 px); near the edges labels moved from about 35 px off to 0.5 px.</i> The correction is only kept if it really improves the edges; otherwise the original solution stays. It takes about a second.</p>
+<ul>
+  <li><b>When:</b> by default for solutions wider than 5° (camera lenses and phones). Telescope fields have hardly any distortion and are left as they are. Solutions already stored in a file are not changed.</li>
+  <li><b>The star catalogue:</b> about 41,000 Hipparcos stars down to magnitude 8 are built in, which is plenty for phones and wide lenses. For longer lenses (50–135 mm), a deeper catalogue helps: choose the depth and press <b>Update the star catalogue</b> in <a href="#settings-distortion">Settings › Star catalogue and lens distortion</a>. It downloads Tycho-2 from CDS VizieR in Strasbourg (to magnitude 8, 9 or 10: 1, 3 or 9 MB) and shows what is in use under the button. <b>Use the built-in catalogue again</b> removes the download. If a download fails, nothing changes.</li>
+  <li><b>Saved solutions</b> (.wcs files and solutions written into FITS headers) include the distortion terms, so other programs that read SIP (PixInsight, Siril, ASTAP, astrometry.net tools) see the same corrected solution.</li>
+</ul>
+
+<h3 id="solve-fails"><a name="solve-fails"></a>When an image won't solve</h3>
+<ul>
+  <li><b>Processed JPGs and TIFFs</b> usually contain no focal length or pixel size, so the scale is taken from <a href="#settings-equipment">Equipment</a>. If the image was drizzled, binned, resized or cropped and resampled, or taken with other equipment, that scale is wrong. ASTAP then tries again with any image scale (between about 10° and 0.3° high), which is slower but finds it (<a href="#settings-solver-astap">ASTAP › If not solved, try again with any image scale</a>). The <i>Scale check</i> line in the Solution tab then shows the real scale.</li>
+  <li>Check <a href="#settings-equipment">Equipment</a>: a wrong focal length or pixel size sends the solver looking for the wrong field size.</li>
+  <li>Heavily processed, cropped or very small JPGs have fewer usable stars. Try the original FITS or PixInsight XISF, or enable astrometry.net.</li>
+  <li>Things in the image that aren't sky – menus and text in a photo of a screen, trees, buildings, empty stacking edges – can confuse the solver. Leave them out with <a href="#crop">Crop and rotate</a> (<kbd>C</kbd>) and solve again.</li>
+  <li><b>Phone photos</b> and other very wide-field photos: answer <i>Yes</i> when PlateSolver asks whether it is a phone photo, to try the <a href="#phone-aids">phone and wide-field aids</a>.</li>
+  <li>For ASTAP: make sure a star database is installed that suits your field size (D50 for most telescopes, W08/G05 for camera lenses, see <a href="#widefield">Wide-field images</a>).</li>
+  <li>Very short exposures or clouds: too few stars. More stars = easier solving.</li>
+  <li>The Log tab shows each solver's message, including ASTAP's own last lines (<i>ASTAP said: …</i>): how many stars it found in the image and in its database, and why it stopped.</li>
+  <li>If ASTAP finds plenty of stars in the image and in the database but still reports "No solution found" at every scale, the star pattern in the image has probably been changed by processing (strong star reduction, transforms or warping in an image editor). Solve the original stacked FITS, or let astrometry.net try.</li>
+</ul>
+
+<!-- ======================================================================= -->
+<h2 id="objects"><a name="objects"></a>8. The objects in your image</h2>
+<h3 id="catalogues"><a name="catalogues"></a>Where the objects come from</h3>
+<ul>
+  <li><b>SIMBAD</b> (online) is the main astronomical database, run by CDS in Strasbourg. PlateSolver asks it for everything with a well-known designation (Messier, NGC, IC, Sharpless, Barnard, named objects, …) plus bright stars and large objects in your field. It also provides parallaxes, published distances and redshifts. Results are remembered for two weeks, so reopening an image is fast and works offline.</li>
+  <li><b>OpenNGC</b> (built in) contains all 13,000+ NGC, IC and Messier objects. By default it is used only when SIMBAD can't be reached, so you still get a list without internet. Some distances then still work (from its parallaxes and redshifts). Each new PlateSolver version comes with the newest OpenNGC release; the version in use is shown on its page in <a href="#settings-catalog-openngc">Settings › Object catalogues › OpenNGC</a>.</li>
+  <li><b>HyperLeda</b> (optional) adds faint galaxies, so background galaxies in deep images get names too (PGC, UGC, ESO, SDSS, 2MASX…). It reads ASTAP's HyperLeda database, <code>hyperleda.csv</code> (about 5 million galaxies, of which 2.2 million have a name). Install it with the HyperLeda installer from <a href="https://www.hnsky.org/astap.htm">hnsky.org/astap.htm</a>; PlateSolver finds it in the ASTAP folder or its <code>Database</code>/<code>databases</code> folder, or you can set the file in <a href="#settings-catalog-hyperleda">Settings › Object catalogues › HyperLeda</a>. That settings page shows which file is used (<i>✓ Found automatically: …</i>) or, in red, that none was found. HyperLeda galaxies are only added for fields up to 15° (setting <i>Only for fields up to</i>), since faint galaxies can't be seen in wide-field and phone photos. The first time it is used, the file is indexed for fast lookups, which takes about half a minute (the Log says so); after that each image takes a fraction of a second. The brightest galaxies in the field come first, up to <i>Maximum number of galaxies</i> (50 by default). NGC and IC objects are left out, since the other catalogues have them. With an internet connection, SIMBAD is asked once for the type and redshift of all these galaxies, which gives most of them a distance.</li>
+</ul>
+<p>When both catalogues are used, objects found in both are <b>merged</b>, so nothing is listed twice.</p>
+<p>What is included (stars brighter than a magnitude, minimum sizes, maximum number of objects) is set in <a href="#settings-catalog-simbad">Settings › Object catalogues</a>.</p>
+
+<h3 id="object-list"><a name="object-list"></a>The object list</h3>
+<table>
+<tr><th>Column</th><th>Meaning</th></tr>
+<tr><td>Object</td><td>Catalogue name (Messier, then NGC/IC, …) with the common name in brackets, e.g. <i>M 42 (Orion Nebula)</i>. For stars, the proper name first, e.g. <i>Betelgeuse (α Ori)</i>.</td></tr>
+<tr><td>Distance</td><td>Distance from Earth in light-years, with the number of decimals from <a href="#settings-general">General</a>. Grey values are estimates from redshift. "–" means no distance is known.</td></tr>
+<tr><td>Size</td><td>Approximate true size across, in light-years (see <a href="#true-size">section 8</a>).</td></tr>
+<tr><td>Type</td><td>Galaxy, emission nebula, open cluster, …</td></tr>
+</table>
+<p>The list starts with the most prominent objects first. Click a column header to sort by it; click again to reverse. Hover over a row for the full information card.</p>
+<ul>
+  <li><b>Click</b> a row: the object is circled on the image, centred and, if small, zoomed in on.</li>
+  <li><b>Double-click</b>: opens its Wikipedia article, or the SIMBAD page when there is no article.</li>
+  <li><b>Right-click</b>: all links (Wikipedia and SIMBAD), and copy name, coordinates or distance.</li>
+</ul>
+
+<h3 id="search"><a name="search"></a>Search and filter</h3>
+<p>Type in the search box above the list (<kbd>Ctrl+F</kbd>) to show only matching objects. It searches names, common names, types and all catalogue designations, so <i>ngc 1976</i> finds M 42 and <i>galaxy</i> shows all galaxies. The buttons below it switch whole categories on and off: <b>Galaxies, Nebulae, Star clusters, Stars, Other</b>.</p>
+<p id="object-filter"><a name="object-filter"></a><b>More filters.</b> The small funnel button at the right of the search box opens a filter panel. It has a lighter background than the main window, so it stands out, with darker boxes to type in and clearly outlined checkboxes. Changes apply at once; click anywhere outside the panel to close it.</p>
+<table>
+<tr><th>Filter</th><th>What it does</th></tr>
+<tr><td>Magnitude</td><td>From (brightest) to (faintest), e.g. empty – 10 shows everything brighter than magnitude 10. Leave a box empty for no limit. Many faint galaxies and nebulae have no known magnitude: <i>Keep objects without a known magnitude</i> decides whether they stay.</td></tr>
+<tr><td>Distance</td><td>From – to, in light-years, thousand, million or billion light-years (choose the unit on the right). With a distance limit, objects without a distance are hidden; <i>Only objects with a distance</i> does that on its own.</td></tr>
+<tr><td>Size</td><td>Apparent size in arc-minutes, e.g. at least 2′ to leave out tiny background galaxies.</td></tr>
+<tr><td>Show only</td><td>Messier objects; objects with a common name (Orion Nebula, Pinwheel Galaxy…); objects in the classic catalogues (Messier, NGC, IC, Caldwell, Sharpless, Barnard, Melotte, Collinder, Abell, Arp, …); objects <b>visible in the image</b> (needs <a href="#visible-stars">Visible stars and label order</a> switched on).</td></tr>
+<tr><td>Types in this image</td><td>Every type found in this image with its count (Spiral galaxy, Planetary nebula, Open cluster, Star, …). Untick the ones you don't want. <i>All</i>/<i>None</i> tick or untick them all.</td></tr>
+<tr><td>Catalogues</td><td>Where the objects came from (SIMBAD, OpenNGC, HyperLeda), e.g. untick HyperLeda to hide the faint background galaxies.</td></tr>
+</table>
+<p>All boxes take decimals, with a point or a comma (9.5 or 9,5), and magnitudes may be negative for very bright objects (Sirius is −1.46).</p>
+<p>When filters are on, the funnel turns blue with a red number (how many filters are on), and the line above the list says what is filtered, e.g. <i>Showing 12. Filter: mag …–10, Messier only.</i> <b>Reset</b> in the panel clears everything. The filter is remembered, also after restarting PlateSolver, so check the funnel if objects seem to be missing. Right-clicking a row also offers <i>Show only: &lt;type&gt;</i>, <i>Hide: &lt;type&gt;</i> and <i>Reset the filter</i>.</p>
+<p>By default the image follows the filter: only objects shown in the list are labelled. Change this in <a href="#settings-general">General</a>. Exports follow the filter too (<a href="#settings-export">Export settings</a>).</p>
+
+<h3 id="visible-stars"><a name="visible-stars"></a>Visible stars first</h3>
+<p>The catalogues know far more objects than any one image shows. Many markers therefore sit on empty-looking sky: faint galaxies and nebulae that are really there, just too faint for this exposure. Meanwhile many stars you <i>can</i> see have no marker, because stars are only taken from the catalogues down to a brightness limit. PlateSolver can instead look at the image itself. This is on by default; change or switch it off in <a href="#settings-visibility">Settings › Visible stars and label order</a>. Switched off, every object from the catalogues is marked and labelled the same way, without looking at the image.</p>
+<p>When it is on, PlateSolver finds the stars in your image after solving, and then:</p>
+<ul>
+  <li><b>Checks every marked object.</b> A star counts as visible when a star in the image sits on its position. A galaxy or nebula counts as visible when its centre is clearly brighter than the sky around it, with the stars masked out and gradients such as the Milky Way allowed for. A star cluster counts as visible when clearly more stars are bunched there than in the sky around it. Objects that fill most of the frame, and objects whose centre is outside the image, are left undecided: they are never dimmed or hidden.</li>
+  <li><b>Adds visible stars that had no marker</b>, brightest first, up to the number you set (50 by default). They are named after their catalogue: a proper name such as Vega, otherwise the Bayer or Flamsteed name (α Lyr, 61 Cyg), HD, HIP or TYC number, with a distance from the star's parallax. Names and distances come from SIMBAD and need an internet connection. Without one, the stars are still marked, from PlateSolver's own star catalogue, as <i>Star mag 4.2</i>.</li>
+  <li><b>Labels the visible objects first</b> (<i>Label order</i>: <i>Visible objects first, then the best-known of the rest</i>, the default). They get the space, and with <i>Hide labels that would overlap</i> on, the others may have to wait until you zoom in. <i>Best-known objects first (Messier, named, largest, brightest), visible or not</i> labels by catalogue data alone – Messier objects, objects with a common name, then the largest and brightest – but still marks visible objects and adds the unmarked stars.</li>
+  <li><b>Dims, shows or hides objects not visible in the image</b> (<i>Objects not visible in the image</i>). <i>Show them dimmed, so the visible objects stand out</i> (the default) draws them faintly; <i>Show them like the visible objects</i> draws every object the same way; <i>Hide them on the image, keep them in the object list</i> leaves them off the image. They always stay in the object list.</li>
+</ul>
+<p>In the object list, visible objects have a small green dot in front of their name, and the information card says <i>In this image: visible</i> or <i>too faint to be seen</i>. The filter panel's <i>Visible in the image</i> shows only what you can see. Changing these settings needs a new solve (<kbd>F5</kbd>), except the show/dim/hide choice, which applies at once.</p>
+<p>The check is a judgement from the pixels, not a certainty. Very faint smudges near the noise may be called "too faint", and a bright patch of Milky Way at a nebula's position may count as visible. Phone photos work best with <a href="#distortion">lens distortion correction</a> on (the default), so the positions line up to the corners.</p>
+
+<h3 id="hover-card"><a name="hover-card"></a>The information card</h3>
+<p>Point at an object on the image (or a row in the list) to see:</p>
+<ul>
+  <li>name and type,</li>
+  <li>distance with its uncertainty, and where the distance comes from,</li>
+  <li>apparent size (arc-minutes) and <b>true size</b> in light-years,</li>
+  <li><b>when the light left it</b>, e.g. "around the year 720" for the Orion Nebula or "about 2.5 million years ago" for the Andromeda Galaxy: the light in your picture set out then,</li>
+  <li>brightness (magnitude), position and other names.</li>
+</ul>
+<p>Where several objects overlap, the card shows the smallest one under the pointer (e.g. a star inside a nebula).</p>
+
+<!-- ======================================================================= -->
+<h2 id="distances"><a name="distances"></a>9. Distances, sizes and light travel time</h2>
+<p>For each object, the distance sources are tried in order and the first that has an answer is used. The order and each source's settings are in <a href="#settings-distance-parallax">Settings › Distance sources</a>.</p>
+<table>
+<tr><th>Source</th><th>Used for</th><th>How it works</th><th>Accuracy</th></tr>
+<tr><td><b>Parallax</b></td><td>Stars, nearby star clusters</td><td>As the Earth orbits the Sun, nearby objects shift slightly against the background. The shift (parallax, in milli-arcseconds, mostly measured by the Gaia satellite) gives the distance directly: <code>d [parsec] = 1000 ÷ parallax [mas]</code>, and 1 parsec = 3.2616 light-years.</td><td>Excellent for nearby stars. Parallaxes with more than 20 % error are skipped (adjustable), because 1/parallax then becomes unreliable.</td></tr>
+<tr><td><b>Published distances</b></td><td>Nebulae, clusters, galaxies</td><td>Distances measured in scientific papers and collected by SIMBAD: Cepheid variables, the tip of the red giant branch, Tully–Fisher, and others. When there are several, the <b>median</b> is used, which is robust against outliers. The ± value is their spread.</td><td>Good; typically 5–20 %.</td></tr>
+<tr><td><b>Redshift</b></td><td>Galaxies only, when nothing better exists</td><td>The expansion of the universe carries distant galaxies away; their light is stretched to longer (redder) wavelengths. The amount (z) gives the distance through the standard cosmological model (H₀ = 70 km/s/Mpc, Ωm = 0.3). Shown in grey in the list.</td><td>An estimate: typically 10–30 % off. Not used for very nearby galaxies (z &lt; 0.003), whose own motion swamps the expansion.</td></tr>
+</table>
+
+<h3 id="light-travel"><a name="light-travel"></a>Light-travel and comoving distance</h3>
+<p>For nearby objects there is only one distance. For galaxies hundreds of millions of light-years away, the universe expanded while their light was on its way. "Distance" can then mean how far the light travelled (the <b>light-travel distance</b>, the default, as used in most popular writing) or how far away the galaxy is <i>now</i> (the <b>comoving distance</b>, which is larger). Choose in <a href="#settings-distance-redshift">Redshift settings</a>.</p>
+
+<h3 id="true-size"><a name="true-size"></a>True size in light-years</h3>
+<p>An object's true size follows from its distance and how large it appears:</p>
+<p><code>size = 2 × distance × tan(apparent size ÷ 2)</code> ≈ distance × apparent size in radians.</p>
+<p>Example: the Orion Nebula appears about 66′ across (1.1°) at 1,300 light-years, giving about 25 light-years. For distant galaxies the <i>angular-diameter distance</i> from cosmology is used, which is the correct distance for turning angles into sizes.</p>
+<p class="warn">Sizes are approximate. A catalogued apparent size depends on how faint an edge was measured (for galaxies usually where the surface brightness drops to 25 mag/arcsec²), so deep images often show objects larger than the catalogue size.</p>
+
+<h3 id="light-left"><a name="light-left"></a>When the light left</h3>
+<p>Light travels one light-year per year, so light from an object 1,300 light-years away left it about 1,300 years ago. PlateSolver turns this into a date ("around the year 720") or, for distant objects, a time ("about 2.5 million years ago"). For galaxies with redshift distances, the exact look-back time from cosmology is used.</p>
+
+<!-- ======================================================================= -->
+<h2 id="overlays"><a name="overlays"></a>10. Overlays</h2>
+<p>Overlays are drawn over the image after solving. Switch them on and off in <b>View › Overlays</b> (shortcuts <kbd>Ctrl+1</kbd>, <kbd>Ctrl+2</kbd>, … in menu order). Their appearance is set in <a href="#settings-overlay-object_labels">Settings › Overlays</a>. A disabled overlay module disappears from the View menu.</p>
+<table>
+<tr><th>Overlay</th><th>Shows</th><th>On at start</th></tr>
+<tr><td><b>Object labels</b></td><td>Outline and name of each object. Galaxies and nebulae are drawn with their catalogued size and orientation. Colours by type: galaxies yellow, nebulae pink, clusters cyan, stars white.</td><td>Yes</td></tr>
+<tr><td><b>RA/Dec grid</b></td><td>Lines of equal right ascension and declination, spaced to suit the field, labelled at the edges.</td><td>No</td></tr>
+<tr><td><b>Constellations</b></td><td>Constellation figures, names and (optionally) the official IAU boundaries. Mainly useful for wide-field images.</td><td>No</td></tr>
+<tr><td><b>Compass</b></td><td>Arrows pointing north (N) and east (E).</td><td>Yes</td></tr>
+</table>
+<p>Which overlays are switched on is remembered between sessions.</p>
+<p><b>Text size.</b> Object names have their own size: <a href="#settings-overlay-object_labels">Settings › Overlays › Object labels › Name text size</a> (14 px by default). The text of the grid, compass and constellations follows <a href="#settings-general">General › Overlay text size</a>. Exported images scale both with the picture (<a href="#settings-export">Export settings › Label size in exports</a>).</p>
+
+<!-- ======================================================================= -->
+<h2 id="export"><a name="export"></a>11. Exporting and saving</h2>
+<h3 id="export-image"><a name="export-image"></a>Annotated image (File › Export annotated image, Ctrl+E)</h3>
+<p>Saves the picture with the overlays that are currently switched on, as PNG or JPEG. Labels and lines are scaled to the output size so they look the same as on screen. A <b>caption strip</b> at the bottom can record the centre coordinates, field of view, scale and orientation. Size, format, label size and caption are set in <a href="#settings-export">Settings › Export</a>. The 2000-pixel size suits forums and social media.</p>
+<h3 id="export-csv"><a name="export-csv"></a>Object list (File › Export object list, Ctrl+Shift+E)</h3>
+<p>A CSV file with one row per object: names, type, coordinates, magnitude, apparent size, distance with uncertainty, method and source, true size, when the light left, and the Wikipedia and SIMBAD links. It opens in Excel or LibreOffice. With Swedish/European Excel settings choose <b>semicolon with decimal comma</b> in <a href="#settings-export">Export settings</a>, so numbers land in separate columns.</p>
+<h3 id="export-wcs"><a name="export-wcs"></a>Plate solution</h3>
+<ul>
+  <li><b>File › Save plate solution (.wcs file)</b> saves the solution as a small side-car file in the same format ASTAP and astrometry.net use, readable by most astronomy software.</li>
+  <li><b>File › Write plate solution into this FITS file</b> stores it in the FITS file's own header (FITS only). The image data is not touched. The file then opens already solved, in PlateSolver and in other programs. Not available for a <a href="#crop">cropped or rotated</a> view, whose solution doesn't fit the file's pixels.</li>
+</ul>
+
+<!-- ======================================================================= -->
+<h2 id="batch"><a name="batch"></a>12. Batch solving a folder</h2>
+<p><b>Tools › Batch solve folder</b> (<kbd>Ctrl+B</kbd>) solves every image in a folder, for example a whole night's subs or your archive.</p>
+<ol>
+  <li>Choose the folder, and whether to include subfolders.</li>
+  <li>Choose what to save for each solved image:
+    <ul>
+      <li>a <b>.wcs file</b> next to it (on by default),</li>
+      <li>the solution <b>written into the FITS header</b> (off by default, because it changes your files),</li>
+      <li>an <b>object list CSV</b> per image (slower, since it looks the objects up online).</li>
+    </ul></li>
+  <li>Press <b>Start</b>. Each row shows the result: <span class="tip">solved</span>, <i>already solved</i>, <span class="warn">failed</span> or error, with the centre, scale and time taken.</li>
+  <li><b>Save summary CSV</b> gives a table of all images with their coordinates. Handy for finding out what was imaged where.</li>
+  <li>Double-click a row to open that image in the main window.</li>
+</ol>
+<p>Batch solving never stops to ask questions. The <a href="#phone-aids">phone and wide-field aids</a> are used in batch mode only when <i>When nothing else solves the image</i> is set to <i>Try the aids automatically</i>.</p>
+<p>FITS files that are already solved are not solved again, and no new files are written for them. The chosen options are remembered as the defaults (<a href="#settings-batch">Batch settings</a>).</p>
+
+<!-- ======================================================================= -->
+<h2 id="settings"><a name="settings"></a>13. Settings reference</h2>
+<p>Open Settings with <kbd>Ctrl+,</kbd> or the toolbar button. Pages are listed on the left: first the general pages, then one page per module, grouped by type. Every module page has an <b>Enabled</b> switch. <b>Restore defaults</b> resets the page you are on. Changes take effect when you press OK. Changes to catalogues, distances or links apply the next time you solve (<kbd>F5</kbd>).</p>
+<p>The descriptions below are taken from the program itself, so they always match your version.</p>
+{{SETTINGS_REFERENCE}}
+
+<!-- ======================================================================= -->
+<h2 id="shortcuts"><a name="shortcuts"></a>14. Keyboard and mouse</h2>
+<table>
+<tr><th>Key / action</th><th>Does</th></tr>
+<tr><td><kbd>Ctrl+O</kbd></td><td>Open an image (or drag a file onto the window)</td></tr>
+<tr><td><kbd>F5</kbd></td><td>Solve (again)</td></tr>
+<tr><td><kbd>Shift</kbd>+<kbd>F5</kbd></td><td>Solve with object hint (e.g. M101)</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>Profiles</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Cancel the running task</td></tr>
+<tr><td><kbd>Ctrl+E</kbd></td><td>Export annotated image</td></tr>
+<tr><td><kbd>Ctrl+Shift+E</kbd></td><td>Export object list (CSV)</td></tr>
+<tr><td><kbd>Ctrl+B</kbd></td><td>Batch solve a folder</td></tr>
+<tr><td><kbd>Ctrl+F</kbd></td><td>Search the object list</td></tr>
+<tr><td><kbd>Ctrl+1</kbd> … <kbd>Ctrl+9</kbd></td><td>Switch overlays on/off (in View › Overlays order)</td></tr>
+<tr><td><kbd>F</kbd> / double-click empty sky</td><td>Fit image to window</td></tr>
+<tr><td><kbd>1</kbd></td><td>Actual size (100 %)</td></tr>
+<tr><td><kbd>Ctrl +</kbd> / <kbd>Ctrl −</kbd> / mouse wheel</td><td>Zoom in / out</td></tr>
+<tr><td>Drag</td><td>Move the image</td></tr>
+<tr><td><kbd>C</kbd></td><td><a href="#crop">Crop and rotate</a>: start (or leave)</td></tr>
+<tr><td>While cropping: drag · <kbd>[</kbd> / <kbd>]</kbd> · <kbd>Enter</kbd> · <kbd>Esc</kbd></td><td>Select an area · rotate 90° anticlockwise / clockwise · apply and solve · cancel. The right mouse button moves the image.</td></tr>
+<tr><td><kbd>Shift</kbd>+<kbd>C</kbd></td><td>Back to the original image (after cropping)</td></tr>
+<tr><td>Point at an object</td><td>Information card</td></tr>
+<tr><td>Click an object</td><td>Select it (image and list)</td></tr>
+<tr><td>Double-click an object</td><td>Open its Wikipedia / SIMBAD page</td></tr>
+<tr><td>Right-click an object</td><td>Links and copy options</td></tr>
+<tr><td><kbd>Ctrl+,</kbd> / ☰ Settings (toolbar, far right)</td><td>Settings</td></tr>
+<tr><td><kbd>F1</kbd></td><td>This manual (in Settings: help for the current page)</td></tr>
+</table>
+
+<!-- ======================================================================= -->
+<h2 id="quiz"><a name="quiz"></a>15. Astronomy quiz</h2>
+<p><b>Help › Astronomy quiz</b> opens a quiz to learn while you have fun. Choose the quiz at the top of the window:</p>
+<table>
+<tr><th>Quiz</th><th>Questions</th><th>Topics</th></tr>
+<tr><td><b>Astronomy and astrophotography</b></td><td>1,000</td><td>The Solar System, stars, galaxies and cosmology, nebulae and star clusters, the night sky, telescopes and mounts, astrophotography cameras and capture, guiding and processing, history and exploration, light, distance and physics.</td></tr>
+<tr><td><b>Astrophysics and cosmology</b></td><td>1,000</td><td>Lives and deaths of stars, the Sun as a star, black holes, neutron stars and white dwarfs, galaxies and the Milky Way, the expanding universe and the Big Bang, dark matter and dark energy, light, spectra and redshift, gravity, orbits and relativity, exoplanets and the search for life, measuring the universe. Not too advanced, but many questions are tricky: they target common misconceptions. Every question was checked by an independent fact-check.</td></tr>
+<tr><td><b>My quiz: …</b></td><td>yours</td><td>Quizzes you made yourself (see below) or got from someone else.</td></tr>
+</table>
+<ul>
+  <li>Click an answer, or press <kbd>1</kbd>–<kbd>5</kbd>. The right answer turns green, a wrong choice red, and a short explanation follows. Then click <b>Next question</b> (or press <kbd>Enter</kbd>).</li>
+  <li>Choose a <b>Topic</b> at the bottom, or <i>All topics</i>. The picture on the left shows the topic.</li>
+  <li>Each question is marked <i>Beginner</i>, <i>Intermediate</i> or <i>Advanced</i>. Which levels are asked is set in <a href="#settings-quiz">Settings › Astronomy quiz</a>, where you can also choose the quiz.</li>
+  <li>Questions are not repeated until you have had every question in the chosen topic and level; then they start over. <b>Each quiz keeps its own score</b>, remembered between sessions. <b>Reset score</b> starts the current quiz again from scratch.</li>
+</ul>
+
+<h3 id="quiz-make"><a name="quiz-make"></a>Make your own quiz</h3>
+<p>You write the questions in a spreadsheet, for example in Excel, Numbers or Google Sheets; PlateSolver turns it into a quiz. No programming is needed.</p>
+<ol>
+  <li><b>Open the quiz maker.</b> In the quiz window click <b>Create a quiz…</b> (top right), or in <a href="#settings-quiz">Settings › Astronomy quiz</a> click <b>Create a quiz from a spreadsheet…</b>.</li>
+  <li><b>Get the template.</b> Click <b>Get the template…</b> and save it, for example in Documents. It opens in your spreadsheet program. It already has the column headings and three example questions, plus a sheet called <i>How to</i> with these instructions.</li>
+  <li><b>Write your questions</b>, one row per question, and delete the examples:
+<table>
+<tr><th>Topic</th><th>Level</th><th>Question</th><th>Right answer</th><th>Wrong answer 1</th><th>Wrong answer 2</th><th>Wrong answer 3</th><th>Wrong answer 4</th><th>Explanation</th><th>Picture</th></tr>
+<tr><td>The Moon</td><td>1</td><td>How long does the Moon take to orbit the Earth?</td><td>About 27 days</td><td>About 7 days</td><td>About 365 days</td><td>About 2 days</td><td></td><td>The sidereal month is about 27.3 days…</td><td></td></tr>
+<tr><td>My telescope</td><td>1</td><td>What does f/5 mean?</td><td>Focal length is 5 × the aperture</td><td>Aperture is 5 × the focal length</td><td>It magnifies 5 times</td><td></td><td></td><td>f-number = focal length ÷ aperture.</td><td>scope.jpg</td></tr>
+</table>
+    <ul>
+      <li><b>Question</b>, <b>Right answer</b> and at least <b>two wrong answers</b> are needed (up to four). PlateSolver shuffles the answers, so it doesn't matter which column the right one is in when it is shown, and answers like "all of the above" don't work.</li>
+      <li><b>Topic</b>: any name. Questions with the same topic are grouped, and you can choose a topic when playing. Empty means "General".</li>
+      <li><b>Level</b>: 1 = beginner, 2 = intermediate, 3 = advanced. Empty means 1.</li>
+      <li><b>Explanation</b> (optional): shown after answering.</li>
+      <li><b>Picture</b> (optional): the file name of an image saved next to the spreadsheet, used as that topic's picture (it is cropped to twice as high as wide). Without one, PlateSolver draws a starry picture for each topic.</li>
+    </ul></li>
+  <li><b>Save</b> the spreadsheet (as .xlsx, or as CSV – both work, also CSV saved by Swedish Excel with semicolons).</li>
+  <li><b>Choose your spreadsheet</b> with <b>Choose file…</b>. PlateSolver checks every row and tells you in plain words what to fix, for example <i>Row 14: needs at least two wrong answers (has 1).</i> Fix it in the spreadsheet, save, and choose the file again.</li>
+  <li><b>Name the quiz</b> and click <b>Create quiz</b>. It appears straight away in the quiz list as <i>My quiz: …</i>.</li>
+</ol>
+<p>Your quizzes are saved in the <b>My quizzes</b> folder (<code>%APPDATA%\PlateSolver\My quizzes</code>; <b>Open My quizzes folder</b> takes you there). Like the built-in quizzes they are stored in a scrambled form, so the answers can't be read in a text editor. To share a quiz, send the <code>.dat</code> file; the other person copies it into their own My quizzes folder. To change a quiz, edit your spreadsheet and create it again with the same name.</p>
+
+<h3 id="quiz-file"><a name="quiz-file"></a>Quiz files and updates</h3>
+<p>The built-in quizzes are <code>platesolver\data\quiz.dat</code> and <code>quiz_astrophysics.dat</code> in the program folder. A newer version of a quiz can simply replace its file. Your progress is kept per question, so questions you have had stay marked after an update. (A <code>quiz.dat</code> placed in PlateSolver's own folder by an older version still works: it appears in the list as <i>My quiz</i>.)</p>
+<p>For developers: <code>python tools\build_quiz.py extract platesolver\data\quiz.dat MyQuiz</code> unpacks a quiz into editable JSON files and pictures, and <code>python tools\build_quiz.py build MyQuiz quiz.dat</code> builds it again. The format is described at the top of <code>tools\build_quiz.py</code>.</p>
+
+<h2 id="troubleshooting"><a name="troubleshooting"></a>16. Troubleshooting</h2>
+<table>
+<tr><th>Symptom</th><th>What to do</th></tr>
+<tr><td>"ASTAP not found"</td><td>Install ASTAP with <a href="#astap-helper">Tools › Install ASTAP and star databases…</a>, or point <a href="#settings-solver-astap">Settings › ASTAP › ASTAP program</a> at <code>astap.exe</code> or its folder. The page shows a green tick when it is found.</td></tr>
+<tr><td>"no star database next to it"</td><td>Install a star database (e.g. D50) with the <a href="#astap-helper">install helper</a> or from the ASTAP website into the ASTAP folder (or a <code>Database</code> folder inside it; on macOS <code>/usr/local/opt/astap</code>), or set <i>Star database folder</i>. If ASTAP solves anyway, the database is elsewhere and ASTAP knows where. That is fine.</td></tr>
+<tr><td>Mac: installing one star database removes another (e.g. D05 replaces D50)</td><td>Two of ASTAP's Mac installers share an internal name, so macOS treats the second as an update of the first. Install the missing database again with the <a href="#astap-helper">install helper</a> and choose <b>Protect and install</b>, or in Terminal run <code>sudo pkgutil --forget d05</code> (the name <code>pkgutil --pkgs</code> shows) before installing the next one. No files are deleted by this.</td></tr>
+<tr><td>The install helper's download fails</td><td>The download page opens instead: download the installer there and run it, then press <b>Check again</b> in the helper. A firewall or proxy can block the download site (SourceForge).</td></tr>
+<tr><td>"Warning scale was inaccurate"</td><td>Harmless: ASTAP solved anyway. It means the expected scale was wrong or missing. Set <a href="#settings-equipment">Equipment</a>. The Solution tab's <i>Scale check</i> says what was off.</td></tr>
+<tr><td>Image not solved</td><td>See <a href="#solve-fails">When an image won't solve</a>.</td></tr>
+<tr><td>Many stars, but not solved</td><td>Check <a href="#settings-equipment">Equipment</a> first (a wrong scale is the most common cause). Then look at <i>Background</i> in the Solution tab: an uneven background or many hot pixels can confuse the solver. The <a href="#uneven">cleaned copy</a> is tried automatically; setting <a href="#settings-solve_prep">Solving aids › Flatten</a> to <i>Always</i> forces it. Also make sure the ASTAP star database suits your field size.</td></tr>
+<tr><td>Milky Way / camera-lens image not solved</td><td>Install ASTAP's <b>W08</b> star database and leave <i>Star database</i> on Automatic. Check the scale in the Solution tab: it should come from EXIF, not your telescope. See <a href="#widefield">Wide-field and Milky Way images</a>.</td></tr>
+<tr><td>"Large FOV, use G05 database" with W08 selected</td><td>ASTAP was told the field is small (a few degrees), which W08 can't handle. The expected field size is wrong. The Log line <i>field height … (from …)</i> says where it came from. For a phone photo, choose a smartphone <a href="#profiles">profile</a>; for a camera-lens photo without EXIF, a camera-lens profile with <i>Lens without EXIF</i> set.</td></tr>
+<tr><td>Telescope JPG not solved, image larger than your sensor</td><td>Probably a drizzled stack: its scale is half (or a third) of your camera's. Enter the sensor size in your profile (or <a href="#settings-equipment">Equipment</a>) so drizzled images are recognised. The Log then says "drizzled 2×".</td></tr>
+<tr><td>"Profile needs: …" in the Log</td><td>The chosen <a href="#profiles">profile</a> is missing something, for example a focal length or a star database. Tools › Profiles… shows the full checklist.</td></tr>
+<tr><td>ASTAP finds many stars but "No solution found"</td><td>Settings are fine but the image's star pattern doesn't match the catalogue, usually because of heavy processing. See <a href="#solve-fails">When an image won't solve</a>.</td></tr>
+<tr><td>XISF file: "install the 'lz4' / 'zstandard' package"</td><td>The file is compressed with LZ4 or Zstandard. Start PlateSolver with <code>run.bat</code> once; it installs the missing libraries automatically. Uncompressed and zlib-compressed XISF files need nothing extra.</td></tr>
+<tr><td>XISF opens but has no hints</td><td>Images created by PixelMath or similar processes as <i>new</i> images don't carry the camera data or plate solution of the stack they came from. Open the integrated or ImageSolver-solved XISF instead, or rely on the <a href="#object-hints">object hint</a> from the file name and your <a href="#profiles">profile</a>.</td></tr>
+<tr><td>"Very few stars" warning</td><td>The image looks starless or nearly so and will most likely not solve. See <a href="#starless">Starless images</a>. If your image clearly has stars but gets this warning, lower <i>Warn when fewer stars than</i> in <a href="#settings-star_check">Star check</a> and solve anyway.</td></tr>
+<tr><td>Stars I can see have no marker; markers on empty sky</td><td>The markers come from catalogues, which hold many objects too faint for your image, and stars only down to a brightness limit. Check that <a href="#visible-stars">Visible stars and label order</a> is switched on (the default): visible stars are then marked and labelled first, and invisible objects are dimmed, or hidden if you choose. Raise <i>Add visible stars that have no marker</i> for more stars.</td></tr>
+<tr><td>"HyperLeda galaxies skipped: hyperleda.csv not found"</td><td>Only matters if you want the faint galaxies: install ASTAP's HyperLeda database, or set its file in Settings › Object catalogues › HyperLeda. Otherwise switch that catalogue off to hide the message.</td></tr>
+<tr><td>Phone photo not solved, even with the phone aids</td><td>Install ASTAP's W08 database and pick a smartphone profile (main camera 26 mm, ultra-wide 13 mm), so the expected scale is right. Use the original photo rather than a copy from a messaging app. Very few stars (city sky, short exposure, clouds) can't be solved. astrometry.net may succeed where ASTAP doesn't.</td></tr>
+<tr><td>Phone photo of a screen or print not solved</td><td>Choose the profile <a href="#screen-photos">Photo of a screen or print</a>, so the phone's lens information is ignored. Leave out the app's menus and text with <a href="#crop">Crop and rotate</a> (<kbd>C</kbd>), and use Image › Solve with object hint with the object's name. If you know how much sky the screen shows, enter it as <i>Height of the sky shown</i> in your own profile.</td></tr>
+<tr><td>Labels near the edges of a wide-field or phone photo are off their stars</td><td>Normally the <a href="#distortion">lens distortion correction</a> fixes this. Check the Log for a line starting with <i>Distortion:</i>: it says why it wasn't corrected (too few stars, or the fit wasn't reliable). Make sure <i>Correct lens distortion</i> isn't set to Never in <a href="#settings-distortion">Settings › Star catalogue and lens distortion</a>. For long lenses, download a deeper catalogue there.</td></tr>
+<tr><td>"The star catalogue could not be downloaded"</td><td>No internet, or VizieR is busy (a second server is tried automatically). Try again later; the catalogue in use is not changed.</td></tr>
+<tr><td>I don't want to be asked whether it's a phone photo</td><td>Set <a href="#settings-phone_aids">Phone and wide-field aids › When nothing else solves the image</a> to <i>Try the aids automatically</i> or <i>Never</i>.</td></tr>
+<tr><td>Objects missing from the list or the image</td><td>A filter may be on (it is remembered between sessions): if the funnel next to the search box is blue with a red number, open it and click <b>Reset</b>. Also check that all category buttons (Galaxies, Nebulae, …) are on and the search box is empty.</td></tr>
+<tr><td>Too many galaxy labels</td><td>Lower <i>Maximum number of galaxies</i> or raise <i>Minimum size</i> in Settings › Object catalogues › HyperLeda.</td></tr>
+<tr><td>Objects list empty, "could not reach simbad…"</td><td>No internet, or SIMBAD is busy. The built-in OpenNGC catalogue is used instead (when enabled). Solve again later with <kbd>F5</kbd> for the full list.</td></tr>
+<tr><td>Few distances</td><td>Many small objects simply have no measured distance. Check that the distance sources are enabled; redshift estimates only apply to galaxies.</td></tr>
+<tr><td>Double-click doesn't open Wikipedia</td><td>There is no article for that object (in your language, and in English if the English fallback is on). The SIMBAD page opens instead.</td></tr>
+<tr><td>Labels missing in a crowded field</td><td>They are hidden to avoid overlaps. Zoom in, filter the list, or turn off <i>Hide labels that would overlap</i> in <a href="#settings-overlay-object_labels">Object labels</a>.</td></tr>
+<tr><td>Image looks too dark or too bright</td><td>Adjust <i>Stretch target background</i> in <a href="#settings-general">General</a>, or turn auto-stretch off for already-processed TIFFs (<a href="#settings-loader-tiff">TIFF settings</a>).</td></tr>
+<tr><td>Image upside down or mirrored</td><td>Change <a href="#settings-loader-fits">FITS › Row order</a>. Solving and labels are right either way.</td></tr>
+<tr><td>Outdated object data</td><td><b>Tools › Clear cached online lookups</b>, then solve again.</td></tr>
+<tr><td>Program won't start</td><td>Run <code>run.bat debug</code> and read the messages. The log file is in the settings folder (<a href="#files">section 15</a>).</td></tr>
+</table>
+
+<!-- ======================================================================= -->
+<h2 id="files"><a name="files"></a>17. Files and folders</h2>
+<table>
+<tr><th>What</th><th>Where</th></tr>
+<tr><td>Settings</td><td><code>%APPDATA%\PlateSolver\settings.json</code></td></tr>
+<tr><td>Log file</td><td><code>%APPDATA%\PlateSolver\platesolver.log</code></td></tr>
+<tr><td>Cached online lookups</td><td><code>%APPDATA%\PlateSolver\cache</code> (SIMBAD 14 days, Wikipedia 30 days)</td></tr>
+<tr><td>Quiz scores and questions asked</td><td><code>%APPDATA%\PlateSolver\quiz_progress*.json</code> (one file per quiz)</td></tr>
+<tr><td>Built-in quizzes</td><td><code>platesolver\data\quiz.dat</code> and <code>quiz_astrophysics.dat</code> in the program folder (see <a href="#quiz-file">Quiz files</a>)</td></tr>
+<tr><td>Your own quizzes</td><td><code>%APPDATA%\PlateSolver\My quizzes</code> (see <a href="#quiz-make">Make your own quiz</a>)</td></tr>
+<tr><td>Downloaded star catalogue</td><td><code>%APPDATA%\PlateSolver\catalogs\stars.npz</code> (the built-in one is <code>platesolver\data\stars.npz</code> in the program folder)</td></tr>
+<tr><td>Your own modules</td><td><code>%APPDATA%\PlateSolver\plugins</code></td></tr>
+<tr><td>Program</td><td>The PlateSolver folder (with <code>run.bat</code>); its Python environment is in <code>.venv</code></td></tr>
+</table>
+<p><b>Tools › Open settings folder</b> opens the first location. Deleting <code>settings.json</code> resets all settings.</p>
+
+<!-- ======================================================================= -->
+<h2 id="credits"><a name="credits"></a>18. Licence, data sources and credits</h2>
+<h3 id="licence"><a name="licence"></a>Licence</h3>
+<p><b>PlateSolver</b> – Copyright © 2026 Miklos Elmberg. PlateSolver is free software: you can use it, share it and change it under the terms of the <b>GNU General Public License, version 3 or (at your option) any later version</b> (GPL-3.0-or-later). It comes with <b>no warranty</b>. If you share a changed version, it must be under the same licence, with its source code available. The full licence text, and everything below, is in <b>Help › Licence and credits</b>; in the program folder as <code>LICENSE.txt</code> and <code>THIRD-PARTY-NOTICES.txt</code>; and the licence texts of all included libraries are in the <code>licenses</code> folder inside the program.</p>
+
+<h3 id="credits-software"><a name="credits-software"></a>Software PlateSolver is built with</h3>
+<table>
+<tr><th>Component</th><th>Used for</th><th>Licence</th></tr>
+<tr><td>Python</td><td>The language and its runtime</td><td>PSF License 2.0</td></tr>
+<tr><td>Qt 6 (PySide6, Shiboken6)</td><td>The user interface</td><td>LGPL-3.0</td></tr>
+<tr><td>NumPy (with OpenBLAS)</td><td>Numerical work on images</td><td>BSD-3-Clause</td></tr>
+<tr><td>Astropy, astropy-iers-data, pyerfa (ERFA)</td><td>FITS, world coordinates, cosmology, constellations</td><td>BSD-3-Clause</td></tr>
+<tr><td>PyYAML, packaging</td><td>Used by Astropy</td><td>MIT · Apache-2.0 or BSD-2-Clause</td></tr>
+<tr><td>Pillow</td><td>JPEG, PNG and TIFF images</td><td>MIT-CMU (HPND)</td></tr>
+<tr><td>pillow-heif, with libheif and libde265 / x265</td><td>iPhone HEIC photos</td><td>BSD-3-Clause, with LGPL-3.0 / GPL-2.0-or-later libraries</td></tr>
+<tr><td>tifffile, imagecodecs</td><td>TIFF files and compressed image data</td><td>BSD-3-Clause</td></tr>
+<tr><td>lz4, zstandard</td><td>Compressed XISF files</td><td>BSD-3-Clause</td></tr>
+<tr><td>openpyxl, et_xmlfile</td><td>Reading quiz spreadsheets</td><td>MIT</td></tr>
+<tr><td>OpenSSL, libffi, setuptools</td><td>Secure connections and Python internals</td><td>Apache-2.0 · MIT · MIT</td></tr>
+<tr><td>MinGW-w64 runtime, Microsoft Visual C++ runtime</td><td>Windows runtime libraries</td><td>GPL-3.0 with GCC Runtime Library Exception, MIT/BSD · Microsoft redistributable licence</td></tr>
+<tr><td>PyInstaller, Inno Setup</td><td>Building the apps and the Windows installer</td><td>GPL-2.0-or-later with bootloader exception · Inno Setup License</td></tr>
+</table>
+
+<h3 id="credits-data"><a name="credits-data"></a>Data sources</h3>
+<ul>
+  <li><b>Hipparcos stars</b> (built-in star catalogue): XHIP, an extended Hipparcos compilation, Anderson, E. &amp; Francis, C. 2012, Astronomy Letters 38, 331 (CDS VizieR V/137D), based on ESA's Hipparcos mission (ESA 1997). Taken from the d3-celestial project by Olaf Frohn (BSD-3-Clause, see <code>data/LICENSE-stars-d3-celestial.txt</code>).</li>
+  <li><b>Tycho-2</b> (downloadable star catalogue): Høg, E. et al. 2000, A&amp;A 355, L27, served by the VizieR catalogue service, CDS, Strasbourg (I/259; Ochsenbein et al. 2000, A&amp;AS 143, 23).</li>
+  <li><b>SIMBAD</b>: this software makes use of the SIMBAD database, operated at CDS, Strasbourg, France. <a href="https://simbad.cds.unistra.fr">simbad.cds.unistra.fr</a> (Wenger et al. 2000, A&amp;AS 143, 9).</li>
+  <li><b>HyperLeda</b>: Makarov, D. et al. 2014, A&amp;A 570, A13, <a href="http://atlas.obs-hp.fr/hyperleda/">atlas.obs-hp.fr/hyperleda</a>, in the format distributed with ASTAP by Han Kleijn.</li>
+  <li><b>OpenNGC</b> by Mattia Verga, licensed CC BY-SA 4.0. <a href="https://github.com/mattiaverga/OpenNGC">github.com/mattiaverga/OpenNGC</a>. Converted to degrees, with duplicate and non-existent entries removed; the release used is recorded in <code>openngc_version.json</code>.</li>
+  <li><b>Constellation figures, names and boundaries</b> from d3-celestial by Olaf Frohn, BSD-3-Clause. <a href="https://github.com/ofrohn/d3-celestial">github.com/ofrohn/d3-celestial</a>.</li>
+  <li><b>ASTAP</b> by Han Kleijn, <a href="https://www.hnsky.org/astap.htm">hnsky.org</a>: separate software, installed by the user with its own installer and under its own licence.</li>
+  <li><b>astrometry.net</b>, Lang et al. 2010, AJ 139, 1782. <a href="https://nova.astrometry.net">nova.astrometry.net</a>.</li>
+  <li><b>Wikipedia</b> articles (© their authors, CC BY-SA), found with the MediaWiki API and opened in your web browser.</li>
+  <li><b>XISF</b> (Extensible Image Serialization Format) by Pleiades Astrophoto, the makers of PixInsight. <a href="https://pixinsight.com/xisf/">pixinsight.com/xisf</a>.</li>
+</ul>
+
+<!-- ======================================================================= -->
+<h2 id="developers"><a name="developers"></a>19. Adding your own modules</h2>
+<p>Everything PlateSolver does is a module, so new features can be added without changing the program. A module is a Python class in a <code>.py</code> file placed in <code>%APPDATA%\PlateSolver\plugins</code> (or in <code>platesolver/plugins/&lt;type&gt;/</code>). It is found automatically at start-up, and its Settings page is generated from its <code>settings_schema()</code>.</p>
+<table>
+<tr><th>Base class</th><th>Method to write</th><th>Purpose</th></tr>
+<tr><td><code>ImageLoader</code></td><td><code>load(path) → ImageData</code></td><td>A new file format</td></tr>
+<tr><td><code>Solver</code></td><td><code>solve(image, ctx) → SolveResult</code></td><td>A new plate solver</td></tr>
+<tr><td><code>CatalogProvider</code></td><td><code>find_objects(image, solution, ctx)</code></td><td>A new object catalogue</td></tr>
+<tr><td><code>DistanceResolver</code></td><td><code>resolve(obj, ctx) → Distance</code></td><td>A new distance source</td></tr>
+<tr><td><code>LinkProvider</code></td><td><code>links_for(obj, ctx) → [Link]</code></td><td>More information links</td></tr>
+<tr><td><code>OverlayLayer</code></td><td><code>render(painter, image, solution, objects)</code></td><td>Something drawn on the image</td></tr>
+</table>
+<p>Example, a cross at the image centre:</p>
+<pre><code>from platesolver.core.interfaces import OverlayLayer
+from platesolver.core.settings import SettingField, STR
+
+class CentreMark(OverlayLayer):
+    plugin_id = "centre_mark"
+    name = "Centre mark"
+    description = "A cross at the image centre."
+
+    def settings_schema(self):
+        return [SettingField("color", "Colour", STR, "#ff4040")]
+
+    def render(self, painter, image, solution, objects):
+        x, y, c = image.width / 2, image.height / 2, self.setting("color")
+        painter.line(x - 30, y, x + 30, y, c)
+        painter.line(x, y - 30, x, y + 30, c)
+</code></pre>
+<p>Pixel coordinates are (column, row) with row 0 at the top of the displayed image. <code>solution.radec_to_pixel(ra, dec)</code> and <code>solution.pixel_to_radec(x, y)</code> convert between pixels and sky coordinates. The README in the program folder describes the design in more detail.</p>
+
+<p class="muted" style="margin-top:3em"><a href="#top">Back to the top</a></p>
+
+<!-- ======================================================================= -->
+<h2 id="whatsnew"><a name="whatsnew"></a>20. What's new</h2>
+<h3 id="new-097"><a name="new-097"></a>Version 0.9.7</h3>
+<ul>
+  <li>New <b>Crop and rotate</b> (toolbar, Image menu or <kbd>C</kbd>): select part of the image with the mouse – after turning it 90° or straightening it if that helps – and solve only that part. Your file is not changed; <b>Original image</b> (<kbd>Shift</kbd>+<kbd>C</kbd>) shows the whole image again. Useful for photos of a screen, images with trees or buildings, and stacks with ragged edges. See <a href="#crop">Crop and rotate</a>.</li>
+  <li>Images are no longer solved as soon as they are opened: look at the image, crop it if needed, then press <b>Solve</b> (<kbd>F5</kbd>). To have them solved on opening as before, switch on <i>Solve automatically when an image is opened</i> in <a href="#settings-general">Settings › General</a>.</li>
+</ul>
+<h3 id="new-096"><a name="new-096"></a>Version 0.9.6</h3>
+<ul>
+  <li>New profile template <b>Photo of a screen or print</b>, for phone photos of stars shown on a tablet, monitor or printout (for example a live view in a capture app). It ignores the phone's lens information, isn't replaced by an automatic switch to a smartphone profile, tries a softened copy against screen moiré, and skips lens distortion correction. Your own profile from it can hold the height of the sky shown on the screen. See <a href="#screen-photos">Photos of a screen or a print</a>.</li>
+  <li>Clearer choices in <a href="#settings-visibility">Settings › Visible stars and label order</a>: each option now says what it does (for example <i>Best-known objects first (Messier, named, largest, brightest), visible or not</i> and <i>Show them like the visible objects</i>).</li>
+</ul>
+<h3 id="new-095"><a name="new-095"></a>Version 0.9.5</h3>
+<ul>
+  <li>New chapter <a href="#equipment-guide">Cameras, lenses and telescopes explained</a>: phones, DSLR and mirrorless cameras, astronomy cameras, smart telescopes, lenses and telescopes in plain words, which profile to use for each, and how PlateSolver handles mirrored and rotated images.</li>
+  <li><b>PlateSolver is free software under the GNU GPL, version 3 or later.</b> New <b>Help › Licence and credits</b> window; the licence and complete credits for every library and data source are in the manual (<a href="#credits">Licence, data sources and credits</a>), the program folder and the <code>licenses</code> folder of the apps.</li>
+  <li>The built-in OpenNGC catalogue is the newest release (v20260501, 1 May 2026), and its version is now shown in Settings › Object catalogues › OpenNGC. Every new PlateSolver build fetches the newest release.</li>
+  <li><b>Visible stars first is now on by default</b>: visible objects are labelled first, up to 50 unmarked visible stars are added, and objects too faint to be seen are dimmed. Change it in <a href="#settings-visibility">Settings › Visible stars and label order</a>.</li>
+  <li>Visible stars that had no marker now get their names from SIMBAD (Vega, α Lyr, HD …) instead of <i>Star mag …</i>: SIMBAD had rejected the way the question was asked. It now asks about small circles around those stars only, which is also quick for wide phone photos.</li>
+  <li>When SIMBAD rejects a question, the Log now shows SIMBAD's own reason instead of the start of its reply.</li>
+</ul>
+<h3 id="new-094"><a name="new-094"></a>Version 0.9.4</h3>
+<ul>
+  <li><b>Visible stars first</b> (optional; on by default from 0.9.5): PlateSolver finds the stars actually visible in your image, labels visible objects first, adds visible stars that had no marker (named from SIMBAD, up to 50 by default) and can dim or hide objects too faint to be seen. See <a href="#visible-stars">Visible stars first</a>.</li>
+  <li>The object list marks visible objects with a green dot, and the filter has <i>Visible in the image</i>.</li>
+</ul>
+<h3 id="new-093"><a name="new-093"></a>Version 0.9.3</h3>
+<ul>
+  <li><b>Mac: star databases no longer replace each other.</b> Some of ASTAP's Mac database installers share an internal name (D50 and D05, G05 and V50), so installing one removed the other. The install helper now spots this before installing and offers <b>Protect and install</b>. See <a href="#astap-helper">The ASTAP install helper</a>.</li>
+  <li>The helper says so when a database has disappeared after an install.</li>
+  <li>Downloaded installers are saved in your Downloads folder.</li>
+</ul>
+<h3 id="new-092"><a name="new-092"></a>Version 0.9.2</h3>
+<ul>
+  <li>Star databases installed on <b>macOS</b> are now found: ASTAP's database installers put them in <code>/usr/local/opt/astap</code>, outside the app. The same goes for <code>/opt/astap</code> and <code>/usr/share/astap/data</code> on Linux. HyperLeda is looked for there too.</li>
+</ul>
+<h3 id="new-091"><a name="new-091"></a>Version 0.9.1</h3>
+<ul>
+  <li><b>ASTAP install helper</b>: <b>Tools › Install ASTAP and star databases…</b> downloads and starts ASTAP's official installer and, as a separate optional step, a star database recommended for your profile. It comes with a clear note that ASTAP and its databases are third-party software and that a database is needed too. See <a href="#astap-helper">The ASTAP install helper</a>.</li>
+  <li>PlateSolver offers the helper once when ASTAP isn't installed, and after a failed solve when the program or a database is missing.</li>
+</ul>
+<h3 id="new-090"><a name="new-090"></a>Version 0.9.0</h3>
+<ul>
+  <li><b>New built-in quiz: Astrophysics and cosmology</b>, 1,000 questions in ten topics, each checked by an independent fact-check. Choose it at the top of the quiz window. See <a href="#quiz">Astronomy quiz</a>.</li>
+  <li><b>Make your own quiz</b> from a spreadsheet: <b>Create a quiz…</b> in the quiz window or in Settings. Step-by-step instructions in <a href="#quiz-make">Make your own quiz</a>.</li>
+  <li>Each quiz keeps its own score. Settings › Astronomy quiz now has a quiz list instead of a file field (the confusing "settings folder" sentence is gone).</li>
+</ul>
+<h3 id="new-087"><a name="new-087"></a>Version 0.8.7</h3>
+<ul>
+  <li>Questions are asked only once per image: <i>Upload to astrometry.net?</i> and <i>Was it taken with a mobile phone?</i> are answered once, and the answer is used for all further attempts on that image (the phone aids' extra tries, solving again with an object hint, <kbd>F5</kbd>). Opening an image again asks again.</li>
+  <li>The offer to enter an object hint after a failed solve appears once per image. You can always use <b>Solve with object hint</b> yourself.</li>
+</ul>
+<h3 id="new-086"><a name="new-086"></a>Version 0.8.6</h3>
+<ul>
+  <li>Larger object names on the image (14 px instead of 11 px), with their own setting: <a href="#settings-overlay-object_labels">Overlays › Object labels › Name text size</a>.</li>
+  <li>Lens distortion correction: stars are found more reliably in vignetted phone photos and ranked by their total light, so the bright, slightly bloated stars of phone photos are used first.</li>
+</ul>
+<h3 id="new-085"><a name="new-085"></a>Version 0.8.5</h3>
+<ul>
+  <li><b>Lens distortion correction</b>: wide-field and phone solutions are checked against a built-in Hipparcos star catalogue and the lens distortion is measured and corrected, so labels sit on their stars out to the corners. See <a href="#distortion">Labels on their stars</a>.</li>
+  <li><b>Star catalogue updates</b>: a deeper Tycho-2 catalogue can be downloaded with the <b>Update the star catalogue</b> button in <a href="#settings-distortion">Settings › Star catalogue and lens distortion</a>.</li>
+  <li>Saved solutions (.wcs files, FITS headers) include the distortion terms, and distortion terms in a FITS file's own solution are now kept when it is displayed.</li>
+</ul>
+<h3 id="new-084"><a name="new-084"></a>Version 0.8.4</h3>
+<ul>
+  <li>Phone aids, refining step: one quick try on the whole photo, then on the middle 75 %, instead of a slow search over the whole sky and all scales (up to 25 seconds saved per image).</li>
+  <li>Phone aids: 2 × 2 binning is never used when it would leave fewer than 600 pixels on the short side (it made small, strongly compressed photos too small for ASTAP).</li>
+  <li>HyperLeda galaxies are only added for fields up to 15° (adjustable).</li>
+</ul>
+<h3 id="new-083"><a name="new-083"></a>Version 0.8.3</h3>
+<ul>
+  <li><b>Phone and wide-field aids</b>: when a phone photo (or other very wide-field photo) can't be solved, PlateSolver asks whether it was taken with a phone and can then black out the foreground, clean up the photo and solve its less distorted centre, then extend the solution to the whole photo. See <a href="#phone-aids">Phone photos that won't solve</a> and <a href="#settings-phone_aids">its settings</a>.</li>
+</ul>
+<h3 id="new-082"><a name="new-082"></a>Version 0.8.2</h3>
+<ul>
+  <li><b>Filter panel for the object list</b>: a small funnel button next to the search box filters by magnitude, distance, size, type, catalogue and "show only" choices (Messier, named objects, classic catalogues). The funnel shows how many filters are on, the filter is remembered, and right-clicking an object offers <i>Show only / Hide</i> its type. See <a href="#search">Search and filter</a>.</li>
+  <li>The filter boxes take decimals with a point or a comma (9.5 or 9,5), whatever language Windows uses, and negative magnitudes.</li>
+  <li>The filter panel has a lighter background with high-contrast text, boxes and checkboxes.</li>
+</ul>
+<h3 id="new-081"><a name="new-081"></a>Version 0.8.1</h3>
+<ul>
+  <li><b>HyperLeda galaxies</b>: ASTAP's optional HyperLeda database adds names to faint background galaxies. See <a href="#catalogues">Where the objects come from</a>.</li>
+  <li>ASTAP star databases are also found in a <code>Database</code> or <code>databases</code> folder inside the ASTAP folder.</li>
+</ul>
+</body>
+</html>
