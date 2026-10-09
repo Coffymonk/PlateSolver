@@ -65,11 +65,11 @@ def test_own_profile_from_camera_catalogue(tmp_path):
 
 
 def test_phone_photo_without_exif_uses_profile_lens(tmp_path):
-    """skagge.jpg: 3024 x 4032, EXIF stripped by Picasa -> with the phone profile ~76 deg high."""
+    """A phone photo of 3024 x 4032 whose EXIF was stripped (e.g. by Picasa) -> with the phone profile ~76 deg high."""
     p, _ = setup(tmp_path)
     p.profiles.choose(next(t for t in TEMPLATES if t.id == "tpl-phone"))
-    Image.fromarray(np.zeros((4032, 3024), np.uint8)).save(tmp_path / "skagge.jpg")
-    img = p.load(tmp_path / "skagge.jpg")
+    Image.fromarray(np.zeros((4032, 3024), np.uint8)).save(tmp_path / "phone_photo.jpg")
+    img = p.load(tmp_path / "phone_photo.jpg")
     assert img.hints.focal_length_mm is None
     assert img.hints.fov_height_deg(img.height) == pytest.approx(76.3, abs=0.5)
     assert "26 mm full-frame equivalent" in img.hints.source["scale"]

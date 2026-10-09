@@ -206,10 +206,10 @@ def test_phone_clue():
     assert pa.phone_clue(ImageData(Path("a.fits"), "FITS", np.zeros((10, 10), np.float32))) == ""
 
 
-@pytest.mark.skipif(not (SAMPLES / "skagge.jpg").exists(), reason="sample photos not present")
+@pytest.mark.skipif(not (SAMPLES / "phone_photo_1.jpg").exists(), reason="sample photos not present")
 def test_real_phone_samples(setup):
     p, _, _ = setup
-    for name in ("skagge.jpg", "skagge2.jpg"):
+    for name in ("phone_photo_1.jpg", "phone_photo_2.jpg"):
         img = p.load(SAMPLES / name)
         base, notes = pa.prepare_base(img)
         assert "foreground" not in notes            # open sky: nothing to black out
