@@ -1,0 +1,25 @@
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# build outputs (the build scripts themselves are kept)
+dist/
+build/dist/
+build/work/
+build/.venv-*/
+
+# local files that are not part of the source
+Samples/
+astap/
+TODO.txt
+*.log
+
+# editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini

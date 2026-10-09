@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PlateSolver
+Comment=Plate solve astronomical images and identify the objects in them
+Exec=PLATESOLVER_DIR/PlateSolver %f
+Icon=PLATESOLVER_DIR/platesolver.png
+Terminal=false
+Categories=Science;Astronomy;Graphics;
+MimeType=image/fits;image/jpeg;image/png;image/tiff;image/heic;
