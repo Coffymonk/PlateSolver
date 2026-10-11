@@ -120,7 +120,11 @@ class ProfileSettings(SettingsSection):
         return [SettingField("auto_switch", "Choose the profile automatically from the image's metadata", BOOL,
                              True, help="E.g. a FITS from a ZWO camera uses your astro-camera profile, a photo "
                                         "with Apple or Samsung EXIF the smartphone profile. The Log says "
-                                        "when the profile changes.")]
+                                        "when the profile changes."),
+                SettingField("suggest_screen", "Suggest the screen profile for photos of a screen", BOOL, True,
+                             help="When a photo looks like a picture of a tablet or monitor showing stars, a bar "
+                                  "above the image offers the profile 'Photo of a screen or print' and to crop to "
+                                  "the star area. Nothing changes unless you click it.")]
 
 
 TELESCOPE_DATABASES = ("d50", "d80", "v50", "d20", "h18", "h17", "d05")

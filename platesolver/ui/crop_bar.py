@@ -77,6 +77,9 @@ class CropBar(QFrame):
     reset_requested = Signal()
     cancel_requested = Signal()
     apply_requested = Signal(bool)        # True = solve right after
+    find_area_requested = Signal()        # straighten and select the star area automatically
+    find_marks_requested = Signal()       # mark the app's text and buttons as areas to hide
+    tool_changed = Signal(str)            # "select" (the area to keep) or "hide" (areas to hide)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -127,9 +130,44 @@ class CropBar(QFrame):
         row.addWidget(self.slider, 1)
         row.addWidget(self.spin)
 
+        outer.addLayout(row)
+
+        # second row: automatic help for photos of a screen, what the mouse draws, and the actions
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        self.btn_find_area = QPushButton("Find the star area")
+        self.btn_find_area.setToolTip("Straighten a photographed screen and select the part with stars, leaving "
+                                      "out the app's bars and the screen's edges. Adjust it afterwards if needed.")
+        self.btn_find_area.clicked.connect(self.find_area_requested)
+        self.btn_find_marks = QPushButton("Find app text and buttons")
+        self.btn_find_marks.setToolTip("Mark text, icons and panels drawn by the app on top of the stars, so they "
+                                       "are hidden (filled with the sky colour) before solving. Click a marked "
+                                       "area to remove it.")
+        self.btn_find_marks.clicked.connect(self.find_marks_requested)
+        row.addWidget(self.btn_find_area)
+        row.addWidget(self.btn_find_marks)
         row.addSpacing(12)
+        row.addWidget(QLabel("The mouse draws:"))
+        self.btn_keep = QToolButton()
+        self.btn_keep.setText("Area to keep")
+        self.btn_keep.setCheckable(True)
+        self.btn_keep.setChecked(True)
+        self.btn_keep.setToolTip("Drag a rectangle around the part of the image to solve")
+        self.btn_hide = QToolButton()
+        self.btn_hide.setText("Areas to hide")
+        self.btn_hide.setCheckable(True)
+        self.btn_hide.setToolTip("Drag rectangles over app text, buttons or anything that isn't sky; they are "
+                                 "filled with the sky colour. Click one to remove it.")
+        for b in (self.btn_keep, self.btn_hide):
+            b.setStyleSheet("QToolButton { padding: 3px 8px; } QToolButton:checked { background: #2f6db5; "
+                            "color: white; border-radius: 3px; }")
+        self.btn_keep.clicked.connect(lambda: self.set_tool("select", emit=True))
+        self.btn_hide.clicked.connect(lambda: self.set_tool("hide", emit=True))
+        row.addWidget(self.btn_keep)
+        row.addWidget(self.btn_hide)
+        row.addStretch(1)
         self.btn_reset = QPushButton("Reset")
-        self.btn_reset.setToolTip("Undo the rotation and the selection")
+        self.btn_reset.setToolTip("Undo the rotation, the selection and the hidden areas")
         self.btn_reset.clicked.connect(self.reset_requested)
         self.btn_cancel = QPushButton("Cancel")
         self.btn_cancel.setToolTip("Leave without changing the image (Esc)")
@@ -151,6 +189,7 @@ class CropBar(QFrame):
         self._timer.setSingleShot(True)
         self._timer.setInterval(250)
         self._timer.timeout.connect(lambda: self.angle_changed.emit(self.angle()))
+        self.tool = "select"
         self.set_selection(None)
 
     def angle(self) -> float:
@@ -168,6 +207,16 @@ class CropBar(QFrame):
             self.slider.blockSignals(False)
         self._timer.start()
 
+    def set_angle_value(self, value: float):
+        """Show an angle chosen elsewhere (e.g. Find the star area) without starting a new preview."""
+        self._timer.stop()
+        for w in (self.slider, self.spin):
+            w.blockSignals(True)
+        self.spin.setValue(round(value, 1))
+        self.slider.setValue(int(round(value * 10)))
+        for w in (self.slider, self.spin):
+            w.blockSignals(False)
+
     def reset_angle(self):
         self._timer.stop()
         for w in (self.slider, self.spin):
@@ -177,12 +226,65 @@ class CropBar(QFrame):
         for w in (self.slider, self.spin):
             w.blockSignals(False)
 
-    def set_selection(self, size: tuple[int, int] | None, image_size: tuple[int, int] | None = None):
-        if size is None:
+    def set_tool(self, tool: str, emit: bool = False):
+        hide = tool == "hide"
+        self.btn_keep.setChecked(not hide)
+        self.btn_hide.setChecked(hide)
+        self.tool = "hide" if hide else "select"
+        if emit:
+            self.tool_changed.emit(self.tool)
+
+    def set_selection(self, size: tuple[int, int] | None, image_size: tuple[int, int] | None = None,
+                      hidden: int = 0):
+        tail = ""
+        if hidden:
+            tail = f" <b>{hidden} area{'s' if hidden != 1 else ''} hidden</b> (red); click one with " \
+                   "<i>Areas to hide</i> to remove it."
+        if getattr(self, "tool", "select") == "hide":
+            self.hint.setText("<b>Areas to hide.</b> Drag rectangles over app text, buttons, panels or anything "
+                              "that isn't sky – they are filled with the sky colour before solving. Click a red "
+                              "area to remove it." + (f" {hidden} hidden so far." if hidden else ""))
+        elif size is None:
             self.hint.setText("<b>Crop and rotate.</b> Drag a rectangle around the part of the image you want "
                               "to solve – leave out menus, text and empty borders. Rotate first if it helps "
-                              "you line up the selection. The file itself is not changed.")
+                              "you line up the selection. For a photo of a screen, try <i>Find the star "
+                              "area</i>. The file itself is not changed." + tail)
         else:
             whole = f" of {image_size[0]} × {image_size[1]}" if image_size else ""
             self.hint.setText(f"<b>Selection: {size[0]} × {size[1]} pixels{whole}.</b> Drag inside it to move "
-                              "it, drag an edge or corner to resize it, or drag outside it for a new one.")
+                              "it, drag an edge or corner to resize it, or drag outside it for a new one." + tail)
+
+
+class SuggestionBar(QFrame):
+    """A slim bar above the image with a suggestion and a few buttons; it never changes anything by itself."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("SuggestBar")
+        self.setStyleSheet("#SuggestBar { background: #2a2a1c; border-bottom: 1px solid #5c5530; }"
+                           "#SuggestBar QLabel { color: #e8dfb0; }")
+        self._row = QHBoxLayout(self)
+        self._row.setContentsMargins(10, 5, 10, 5)
+        self._row.setSpacing(6)
+        self.text = QLabel()
+        self.text.setWordWrap(True)
+        self._row.addWidget(self.text, 1)
+        self._buttons: list = []
+        self.hide()
+
+    def show_suggestion(self, text: str, buttons):
+        """buttons: [(label, callback), ...]; any button also closes the bar."""
+        for b in self._buttons:
+            self._row.removeWidget(b)
+            b.deleteLater()
+        self._buttons = []
+        self.text.setText(text)
+        for i, (label, cb) in enumerate(buttons):
+            b = QPushButton(label)
+            if i == 0:
+                b.setStyleSheet("QPushButton { background: #2f6db5; color: white; padding: 3px 10px; "
+                                "border-radius: 3px; } QPushButton:hover { background: #3b80cf; }")
+            b.clicked.connect(lambda _=False, f=cb: (self.hide(), f()))
+            self._row.addWidget(b)
+            self._buttons.append(b)
+        self.show()

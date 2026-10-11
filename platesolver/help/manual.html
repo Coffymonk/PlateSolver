@@ -224,8 +224,9 @@
   <li>tries a <b>softened copy</b> of the photo if it doesn't solve as it is. This smooths <i>moiré</i> – the wavy pattern a camera picks up from screen pixels – and JPEG blocks; the phone aids are not used;</li>
   <li><b>skips lens distortion correction</b>: the stretch in such a photo comes from the viewing angle, not from a lens.</li>
 </ul>
+<p><b>PlateSolver notices photos of a screen.</b> When you open a photo that looks like one – a star field inside a dark frame with straight edges – a yellow bar above the image says so and offers <b>Use it and crop to the stars</b>: it picks the profile <i>Photo of a screen or print</i> (or your own profile of that kind), opens <a href="#crop">Crop and rotate</a>, straightens the screen, selects the star area and marks the app's text and buttons to be hidden, ready for you to check and apply. <b>Use the profile only</b> just changes the profile; <b>No, thanks</b> closes the bar. Nothing changes unless you click. The suggestion can be switched off in <a href="#settings-profiles">Settings › Profiles</a>.</p>
 <p><b>Height of the sky shown</b> (optional): if you know how much sky the screen shows – for example from your telescope and camera (see <a href="#eq-scale">image scale</a>) – make your own profile and enter it in degrees. The solver then searches with that field instead of trying every scale. Measure the height of the <i>star area</i> only, as shown on the screen.</p>
-<p><b>Tips:</b> photograph the screen straight on and fill the frame with the star area; crop away menus, buttons and text before solving (they are not stars and confuse the solver) – PlateSolver's own <a href="#crop">Crop and rotate</a> (<kbd>C</kbd>) does this without changing the photo; turn off the screen's night or red mode if you can; avoid reflections. The solution then applies to the cropped photo. Labels on a photo of a screen are positioned as well as the viewing angle allows, so they can be a little off near the edges.</p>
+<p><b>Tips:</b> photograph the screen straight on and fill the frame with the star area; leave out menus, buttons and text before solving (they are not stars and confuse the solver) – <a href="#crop">Crop and rotate</a> (<kbd>C</kbd>) with <i>Find the star area</i> and <i>Find app text and buttons</i> does this without changing the photo; turn off the screen's night or red mode if you can; avoid reflections. The solution then applies to the cropped photo. Labels on a photo of a screen are positioned as well as the viewing angle allows, so they can be a little off near the edges.</p>
 
 <h3 id="eq-mirrored"><a name="eq-mirrored"></a>Rotated, mirrored and upside-down images</h3>
 <p>Telescope images are almost never "north up": the camera's angle on the telescope decides how the picture is turned, and that's fine. Some setups also show the sky <b>mirrored</b> – as if seen in a mirror:</p>
@@ -272,8 +273,14 @@
   <li>Click <b>Crop and rotate</b>. A bar appears above the image.</li>
   <li><b>Rotate</b> first if it helps you line up the selection: the <b>90°</b> buttons turn the image a quarter turn anticlockwise or clockwise (<kbd>[</kbd> and <kbd>]</kbd>), and <b>Straighten</b> turns it a little, up to 45° either way – for example to line up a photographed screen with the edges. New corners are filled with the sky colour.</li>
   <li><b>Drag a rectangle</b> around the part you want. Drag inside it to move it, drag an edge or a corner to resize it, or drag outside it to start again. The size is shown at its corner; everything outside is darkened. The mouse wheel zooms, and the right mouse button moves the image while you select.</li>
-  <li><b>Apply and solve</b> (<kbd>Enter</kbd>) shows only the selection and plate solves it. <b>Apply</b> shows it without solving, <b>Reset</b> undoes the rotation and the selection, and <b>Cancel</b> (<kbd>Esc</kbd>) leaves everything as it was.</li>
+  <li><b>Hide what isn't sky</b> (optional): switch <i>The mouse draws</i> to <b>Areas to hide</b> and drag rectangles over app text, buttons, panels, a roof or a tree. They are shown in red and filled with the colour of the sky around them when you apply, so the solver doesn't take them for stars. Click a red area to remove it; <b>Area to keep</b> switches back to the selection.</li>
+  <li><b>Apply and solve</b> (<kbd>Enter</kbd>) shows only the selection and plate solves it. <b>Apply</b> shows it without solving, <b>Reset</b> undoes the rotation, the selection and the hidden areas, and <b>Cancel</b> (<kbd>Esc</kbd>) leaves everything as it was.</li>
 </ol>
+<p><b>Help for photos of a screen.</b> Two buttons in the bar do the work for you; check the result and adjust it before applying:</p>
+<ul>
+  <li><b>Find the star area</b> straightens the photographed screen (from its straight edges) and selects the part with stars, leaving out the app's top and bottom bars and the screen's frame. On a photo without a screen it simply selects where the stars are, without turning it.</li>
+  <li><b>Find app text and buttons</b> marks text lines, icons, round buttons and panels drawn on top of the stars as areas to hide (inside the selection, if there is one). A very bright star pair can occasionally be marked too – click it to remove it.</li>
+</ul>
 <p>The edited view is then used like any image: solved, labelled, listed and exported. The Solution tab and the Log say that it is an edited view, and exports get <i>_edited</i> in their suggested file names. You can crop again to narrow it further. <b>Original image</b> in the toolbar (<b>Image › Back to the original image</b>, <kbd>Shift</kbd>+<kbd>C</kbd>) shows the whole image again; solve it again after that (<kbd>F5</kbd>).</p>
 <ul>
   <li>Cropping and rotating don't change how much sky a pixel covers, so your profile and the image's own scale information still apply. Plate solvers find the stars at any angle, so rotating isn't needed for solving – it's only there to make the selection easier.</li>
@@ -772,6 +779,12 @@ class CentreMark(OverlayLayer):
 
 <!-- ======================================================================= -->
 <h2 id="whatsnew"><a name="whatsnew"></a>20. What's new</h2>
+<h3 id="new-098"><a name="new-098"></a>Version 0.9.8</h3>
+<ul>
+  <li><b>Photos of a screen are recognised:</b> a bar above the image offers the profile <i>Photo of a screen or print</i> and to crop to the stars. It can be switched off in Settings › Profiles. See <a href="#screen-photos">Photos of a screen or a print</a>.</li>
+  <li><a href="#crop">Crop and rotate</a> has <b>Find the star area</b> (straightens a photographed screen and selects the stars), <b>Find app text and buttons</b>, and <b>Areas to hide</b>: rectangles over anything that isn't sky are filled with the sky colour before solving.</li>
+  <li>The manual gives the location of the built-in quiz files in the Windows, macOS and Linux apps.</li>
+</ul>
 <h3 id="new-097"><a name="new-097"></a>Version 0.9.7</h3>
 <ul>
   <li>New <b>Crop and rotate</b> (toolbar, Image menu or <kbd>C</kbd>): select part of the image with the mouse – after turning it 90° or straightening it if that helps – and solve only that part. Your file is not changed; <b>Original image</b> (<kbd>Shift</kbd>+<kbd>C</kbd>) shows the whole image again. Useful for photos of a screen, images with trees or buildings, and stacks with ragged edges. See <a href="#crop">Crop and rotate</a>.</li>

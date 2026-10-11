@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -34,13 +34,15 @@ class Edit:
     quarter_turns: int = 0             # 90° steps clockwise
     angle_deg: float = 0.0             # straightening, positive = clockwise, -45…45
     crop: tuple[int, int, int, int] | None = None   # x, y, width, height in the rotated image
+    hide: list = field(default_factory=list)          # areas (x, y, w, h) in the rotated image to fill with sky
 
     @property
     def rotation_deg(self) -> float:
         return (self.quarter_turns % 4) * 90.0 + self.angle_deg
 
     def is_identity(self) -> bool:
-        return self.quarter_turns % 4 == 0 and abs(self.angle_deg) < 1e-6 and self.crop is None
+        return (self.quarter_turns % 4 == 0 and abs(self.angle_deg) < 1e-6 and self.crop is None
+                and not self.hide)
 
 
 def _rotate_plane(plane: np.ndarray, angle_deg: float, fill: float) -> np.ndarray:
@@ -111,7 +113,30 @@ def describe(edit: Edit) -> str:
         parts.append(f"rotated {abs(rot):g}° {'clockwise' if rot > 0 else 'anticlockwise'}")
     if edit.crop is not None:
         parts.append(f"cropped to {edit.crop[2]} × {edit.crop[3]} px")
+    if edit.hide:
+        n = len(edit.hide)
+        parts.append(f"{n} area{'s' if n != 1 else ''} hidden")
     return ", ".join(parts) if parts else "unchanged"
+
+
+def hide_areas(data: np.ndarray, areas) -> np.ndarray:
+    """Fill rectangles (x, y, w, h) with the sky colour around each, so app text and buttons aren't seen
+    as stars. Works on (H, W) and (H, W, C) arrays; returns a copy."""
+    out = np.array(data, copy=True)
+    h, w = out.shape[:2]
+    for (x, y, aw, ah) in areas or []:
+        x0, y0 = max(0, int(x)), max(0, int(y))
+        x1, y1 = min(w, int(x + aw)), min(h, int(y + ah))
+        if x1 <= x0 or y1 <= y0:
+            continue
+        m = max(4, int(0.5 * max(x1 - x0, y1 - y0)))          # a ring around the area gives the sky colour
+        rx0, ry0, rx1, ry1 = max(0, x0 - m), max(0, y0 - m), min(w, x1 + m), min(h, y1 + m)
+        around = np.ones((ry1 - ry0, rx1 - rx0), bool)
+        around[y0 - ry0:y1 - ry0, x0 - rx0:x1 - rx0] = False          # only the pixels around the area
+        ring = data[ry0:ry1, rx0:rx1][around] if around.any() else data[y0:y1, x0:x1].reshape(-1, *out.shape[2:])
+        sky = np.median(ring, axis=0)
+        out[y0:y1, x0:x1] = sky
+    return out
 
 
 def edited_image(image: ImageData, edit: Edit) -> ImageData:
@@ -119,9 +144,13 @@ def edited_image(image: ImageData, edit: Edit) -> ImageData:
     rotated = rotate_array(image.data, edit.quarter_turns, edit.angle_deg)
     edit = dataclasses.replace(edit, crop=clamp_crop(edit.crop, rotated.shape[1], rotated.shape[0]))
     data = rotated
+    hide = list(edit.hide or [])
     if edit.crop is not None:
         x, y, w, h = edit.crop
-        data = np.ascontiguousarray(rotated[y:y + h, x:x + w])
+        data = np.ascontiguousarray(data[y:y + h, x:x + w])
+        hide = [(hx - x, hy - y, hw, hh) for (hx, hy, hw, hh) in hide]     # into the cropped image
+    if hide:
+        data = hide_areas(data, hide)          # after cropping, so only sky inside the selection is used
     text = describe(edit)
     notes = list(image.notes) + [f"Edited view ({text}); the file itself is unchanged"]
     if image.header_wcs is not None:

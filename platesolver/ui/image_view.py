@@ -128,6 +128,7 @@ class ImageView(QGraphicsView):
     zoom_changed = Signal(float)
     file_dropped = Signal(str)
     crop_changed = Signal()               # the crop selection changed (crop mode)
+    hidden_changed = Signal()             # the hidden areas changed (crop mode, tool "hide")
 
     MIN_ZOOM, MAX_ZOOM = 0.02, 32.0
 
@@ -149,6 +150,8 @@ class ImageView(QGraphicsView):
         self._crop: QRectF | None = None      # selection in scene (= image pixel) coordinates
         self._crop_items: list = []
         self._drag = None                     # (kind, start scene point, start rect) while dragging the selection
+        self._tool = "select"                 # crop mode: "select" the area to keep, or "hide" app marks
+        self._hidden: list[QRectF] = []       # areas to fill with sky (crop mode)
         self._pan = None                      # last mouse position while panning in crop mode
 
     # ------------------------------------------------------------------ image
@@ -236,7 +239,12 @@ class ImageView(QGraphicsView):
     def mousePressEvent(self, event):
         self._press_pos = event.position()
         if self._crop_mode and self._pixmap is not None:
-            if event.button() == Qt.LeftButton:
+            if event.button() == Qt.LeftButton and self._tool == "hide":
+                p = self._clamp_point(self.mapToScene(event.position().toPoint()))
+                self._hidden.append(QRectF(p, p))
+                self._drag = ("hide", p, None)
+                self._update_crop_items()
+            elif event.button() == Qt.LeftButton:
                 p = self.mapToScene(event.position().toPoint())
                 kind = self._crop_hit(event.position())
                 if kind is None:
@@ -252,6 +260,22 @@ class ImageView(QGraphicsView):
 
     def mouseReleaseEvent(self, event):
         if self._crop_mode:
+            if self._drag is not None and self._drag[0] == "hide" and event.button() == Qt.LeftButton:
+                self._drag = None
+                r = self._hidden.pop().normalized() if self._hidden else QRectF()
+                start = getattr(self, "_press_pos", None)
+                if start is not None and (event.position() - start).manhattanLength() < 4:
+                    # a click: remove the hidden area under the pointer
+                    p = self.mapToScene(event.position().toPoint())
+                    hits = [i for i, h in enumerate(self._hidden) if h.contains(p)]
+                    if hits:
+                        self._hidden.pop(hits[-1])
+                elif r.width() >= 2 and r.height() >= 2:
+                    self._hidden.append(r)
+                self._update_crop_items()
+                self.hidden_changed.emit()
+                self._pan = None
+                return
             if self._drag is not None and event.button() == Qt.LeftButton:
                 self._drag = None
                 if self._crop is not None:
@@ -312,6 +336,8 @@ class ImageView(QGraphicsView):
     def set_crop_mode(self, on: bool):
         self._crop_mode = bool(on)
         self._drag = self._pan = None
+        self._tool = "select"
+        self._hidden = []
         self.setDragMode(QGraphicsView.NoDrag if on else QGraphicsView.ScrollHandDrag)
         if on:
             self.viewport().setCursor(Qt.CrossCursor)
@@ -328,6 +354,31 @@ class ImageView(QGraphicsView):
         x0, y0 = math.floor(r.left() + 0.5), math.floor(r.top() + 0.5)
         x1, y1 = math.floor(r.right() + 0.5), math.floor(r.bottom() + 0.5)
         return x0, y0, max(0, x1 - x0), max(0, y1 - y0)
+
+    def set_crop_tool(self, tool: str):
+        """'select' draws the area to keep; 'hide' draws areas to hide (click one to remove it)."""
+        self._tool = "hide" if tool == "hide" else "select"
+        self._drag = None
+        self.viewport().setCursor(Qt.CrossCursor)
+
+    def crop_tool(self) -> str:
+        return self._tool
+
+    def hidden_rects(self) -> list[tuple[int, int, int, int]]:
+        """The hidden areas as whole image pixels (x, y, width, height)."""
+        out = []
+        for r in self._hidden:
+            r = r.normalized()
+            x0, y0 = math.floor(r.left() + 0.5), math.floor(r.top() + 0.5)
+            x1, y1 = math.floor(r.right() + 0.5), math.floor(r.bottom() + 0.5)
+            if x1 > x0 and y1 > y0:
+                out.append((x0, y0, x1 - x0, y1 - y0))
+        return out
+
+    def set_hidden_rects(self, rects):
+        self._hidden = [QRectF(x - 0.5, y - 0.5, w, h) for (x, y, w, h) in (rects or [])]
+        self._update_crop_items()
+        self.hidden_changed.emit()
 
     def set_crop_rect(self, rect: tuple[float, float, float, float] | None):
         self._crop = None if rect is None else QRectF(rect[0] - 0.5, rect[1] - 0.5, rect[2], rect[3])
@@ -364,6 +415,11 @@ class ImageView(QGraphicsView):
         return "move" if tl.x() < x < br.x() and tl.y() < y < br.y() else None
 
     def _crop_cursor(self, pos):
+        if self._crop_mode and self._tool == "hide":
+            p = self.mapToScene(pos.toPoint())
+            over = any(h.contains(p) for h in self._hidden)
+            self.viewport().setCursor(Qt.PointingHandCursor if over else Qt.CrossCursor)
+            return
         kind = self._crop_hit(pos) if self._crop_mode else None
         shapes = {"move": Qt.SizeAllCursor, "l": Qt.SizeHorCursor, "r": Qt.SizeHorCursor,
                   "t": Qt.SizeVerCursor, "b": Qt.SizeVerCursor, "tl": Qt.SizeFDiagCursor,
@@ -373,6 +429,11 @@ class ImageView(QGraphicsView):
 
     def _drag_crop(self, p: QPointF):
         kind, start, rect0 = self._drag
+        if kind == "hide":
+            if self._hidden:
+                self._hidden[-1] = QRectF(start, self._clamp_point(p)).normalized()
+            self._update_crop_items()
+            return
         p = self._clamp_point(p)
         if kind == "new":
             self._crop = QRectF(self._clamp_point(start), p).normalized()
@@ -415,6 +476,16 @@ class ImageView(QGraphicsView):
         dim.setZValue(200)
         self.scene().addItem(dim)
         self._crop_items.append(dim)
+        for hr in self._hidden:
+            pen = QPen(QColor("#ff5a5a"), 1.5)
+            pen.setCosmetic(True)
+            brush = QBrush(QColor(255, 70, 70, 110), Qt.BDiagPattern)
+            item = self.scene().addRect(hr.normalized(), pen, brush)
+            item.setZValue(204)
+            self._crop_items.append(item)
+            fill = self.scene().addRect(hr.normalized(), QPen(Qt.NoPen), QBrush(QColor(255, 60, 60, 45)))
+            fill.setZValue(203)
+            self._crop_items.append(fill)
         if self._crop is None:
             return
         r = self._crop.normalized()

@@ -7,6 +7,7 @@ import logging
 import math
 from pathlib import Path
 
+import numpy as np
 from PySide6.QtCore import QByteArray, QPoint, Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QCursor, QDesktopServices, QKeySequence, QShortcut
 from PySide6.QtWidgets import (QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox,
@@ -28,7 +29,7 @@ from platesolver.core.registry import PluginRegistry
 from platesolver.core.settings import SettingsStore
 from platesolver.ui.image_view import ImageView, QtOverlayPainter, rgb8_to_qimage
 from platesolver.ui.confirm import ConfirmBridge
-from platesolver.ui.crop_bar import CropBar, crop_icon
+from platesolver.ui.crop_bar import CropBar, SuggestionBar, crop_icon
 from platesolver.ui.object_info import HoverCard, card_html
 from platesolver.ui.settings_dialog import SettingsDialog
 from platesolver.ui.sidebar import Sidebar, object_menu, open_first_link
@@ -135,10 +136,12 @@ class MainWindow(QMainWindow):
         self.sidebar = Sidebar()
         self.crop_bar = CropBar()
         self.crop_bar.hide()
+        self.suggest_bar = SuggestionBar()
         image_area = QWidget()
         lay = QVBoxLayout(image_area)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
+        lay.addWidget(self.suggest_bar)
         lay.addWidget(self.crop_bar)
         lay.addWidget(self.view, 1)
         split = QSplitter()
@@ -173,6 +176,10 @@ class MainWindow(QMainWindow):
         self.crop_bar.reset_requested.connect(self._crop_reset)
         self.crop_bar.cancel_requested.connect(self.cancel_crop)
         self.crop_bar.apply_requested.connect(self.apply_crop)
+        self.crop_bar.find_area_requested.connect(self.find_star_area)
+        self.crop_bar.find_marks_requested.connect(self.find_app_marks)
+        self.crop_bar.tool_changed.connect(self._crop_tool_changed)
+        self.view.hidden_changed.connect(self._crop_selection_changed)
         self._crop_keys = []
         for key, slot in (("Esc", self.cancel_crop), ("Return", lambda: self.apply_crop(True)),
                           ("Enter", lambda: self.apply_crop(True)), ("[", lambda: self._crop_rotate(-1)),
@@ -455,11 +462,27 @@ class MainWindow(QMainWindow):
 
         def work(ctx):
             image = self.pipeline.load(path)
-            return image, self._display_rgb(image)
+            return image, self._display_rgb(image), self._screen_guess(image)
         self._run(work, self._opened, f"Opening {path.name}…")
 
+    def _screen_guess(self, image):
+        """For a photo that may show a screen: where the stars are (or None). Runs in the opening task."""
+        prof = self.pipeline.profiles.active()
+        if not self.store.get("profiles", "suggest_screen", True) or (prof is not None and prof.kind == "screen"):
+            return None
+        if image.format.upper() not in ("JPEG", "JPG", "PNG", "HEIC", "HEIF", "TIFF"):
+            return None
+        try:
+            from platesolver.core.screendetect import find_star_area
+            guess = find_star_area(image.luminance())
+        except Exception:
+            log.exception("Screen detection failed")
+            return None
+        return guess if guess.looks_like_screen else None
+
     def _opened(self, payload):
-        image, rgb = payload
+        image, rgb, screen = payload
+        self.suggest_bar.hide()
         if self.view.crop_mode():
             self._end_crop_mode()
         self.image, self.result, self.objects, self.selected = image, None, [], None
@@ -477,7 +500,9 @@ class MainWindow(QMainWindow):
             self._log_missing(self.pipeline.profiles.active())
             self._refresh_profiles()
         self._update_actions()
-        if self.general.get("auto_solve"):
+        if screen is not None:
+            self._suggest_screen_profile(screen)
+        elif self.general.get("auto_solve"):
             QTimer.singleShot(0, self.solve)
 
     # ------------------------------------------------------------------ solve
@@ -914,7 +939,9 @@ class MainWindow(QMainWindow):
         self._hovered = None
         self.view.clear_layers()
         self.view.set_crop_mode(True)
+        self._crop_preview_rgb = self._rgb
         self.crop_bar.reset_angle()
+        self.crop_bar.set_tool("select")
         self.crop_bar.set_selection(None)
         self.crop_bar.show()
         self.view.setFocus()
@@ -930,6 +957,7 @@ class MainWindow(QMainWindow):
             QApplication.restoreOverrideCursor()
         self._crop_preview_rgb = rgb
         self.view.set_crop_rect(None)
+        self.view.set_hidden_rects([])          # positions change with the rotation
         self.view.set_image(rgb8_to_qimage(rgb))
 
     def _crop_rotate(self, step: int):
@@ -952,12 +980,96 @@ class MainWindow(QMainWindow):
             self._crop_preview()
         else:
             self.view.set_crop_rect(None)
+            self.view.set_hidden_rects([])
+
+    def _crop_tool_changed(self, tool: str):
+        self.view.set_crop_tool(tool)
+        self._crop_selection_changed()
+
+    def find_star_area(self, guess=None):
+        """Crop and rotate › Find the star area: straighten a photographed screen and select the stars."""
+        if not self.view.crop_mode() or self.image is None:
+            return
+        from platesolver.core.imageedit import rotate_array
+        from platesolver.core.screendetect import find_star_area
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            if guess is None or self._crop_q:
+                lum = self.image.luminance()
+                if self._crop_q:
+                    lum = rotate_array(lum, self._crop_q, 0.0)
+                guess = find_star_area(lum)
+        finally:
+            QApplication.restoreOverrideCursor()
+        if guess.crop is None:
+            self.set_status("No area with stars found – drag the selection yourself")
+            return
+        self._crop_angle = guess.angle
+        self.crop_bar.set_angle_value(guess.angle)
+        self._crop_preview()
+        self.view.set_crop_rect(guess.crop)
+        self.crop_bar.set_tool("select")
+        self.view.set_crop_tool("select")
+        msg = f"Star area selected ({guess.crop[2]} × {guess.crop[3]} px"
+        msg += f", straightened {abs(guess.angle):g}° {'clockwise' if guess.angle > 0 else 'anticlockwise'})" \
+            if guess.angle else ")"
+        self.log(msg)
+        self.set_status(msg + " – adjust it if needed")
+
+    def find_app_marks(self):
+        """Crop and rotate › Find app text and buttons: mark them as areas to hide (inside the selection)."""
+        if not self.view.crop_mode() or self._crop_preview_rgb is None:
+            return
+        from platesolver.core.screendetect import find_app_marks
+        rgb = self._crop_preview_rgb
+        sel = self.view.crop_rect()
+        x0, y0 = 0, 0
+        if sel is not None and sel[2] > 16 and sel[3] > 16:
+            x0, y0 = sel[0], sel[1]
+            rgb = rgb[y0:y0 + sel[3], x0:x0 + sel[2]]
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            marks = find_app_marks(rgb.mean(axis=2).astype(np.float32) / 255.0)
+        finally:
+            QApplication.restoreOverrideCursor()
+        existing = self.view.hidden_rects()
+        new = [(x + x0, y + y0, w, h) for (x, y, w, h) in marks]
+        self.view.set_hidden_rects(existing + [r for r in new if r not in existing])
+        self.log(f"Found {len(new)} area{'s' if len(new) != 1 else ''} with app text or buttons – shown in red, "
+                 "click one with 'Areas to hide' to keep it")
+        if new:
+            self.crop_bar.set_tool("hide")
+            self.view.set_crop_tool("hide")
+        self._crop_selection_changed()
+
+    def _suggest_screen_profile(self, guess):
+        """A bar above the image offering the screen profile (and cropping to the stars)."""
+        mgr = self.pipeline.profiles
+        prof = next((p for p in mgr.user_profiles() if p.kind == "screen"), None) or mgr.get("tpl-screen")
+        if prof is None:
+            return
+
+        def use(crop: bool):
+            mgr.choose(prof)
+            self.log(f"Profile: {prof.name} – {prof.summary()}")
+            self.reload_hints()
+            self._refresh_profiles()
+            if crop:
+                self.start_crop()
+                self.find_star_area(guess)
+                self.find_app_marks()
+        self.suggest_bar.show_suggestion(
+            "<b>This looks like a photo of a screen.</b> The profile <i>" + prof.name.replace("Template: ", "")
+            + "</i> ignores the phone's lens, and cropping to the stars leaves out the app's menus and text.",
+            [("Use it and crop to the stars", lambda: use(True)), ("Use the profile only", lambda: use(False)),
+             ("No, thanks", lambda: None)])
 
     def _crop_selection_changed(self):
         sel = self.view.crop_rect()
         rect = self.view.sceneRect()
         whole = (int(round(rect.width())), int(round(rect.height())))
-        self.crop_bar.set_selection(None if sel is None else (sel[2], sel[3]), whole)
+        self.crop_bar.set_selection(None if sel is None else (sel[2], sel[3]), whole,
+                                    hidden=len(self.view.hidden_rects()))
 
     def _end_crop_mode(self):
         self.view.set_crop_mode(False)
@@ -986,7 +1098,7 @@ class MainWindow(QMainWindow):
         except ValueError as exc:
             QMessageBox.information(self, APP_NAME, str(exc))
             return
-        edit = Edit(self._crop_q, self._crop_angle, crop)
+        edit = Edit(self._crop_q, self._crop_angle, crop, hide=self.view.hidden_rects())
         if edit.is_identity():
             self.cancel_crop()
             if solve and not (self.result and self.result.success):
