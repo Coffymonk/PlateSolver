@@ -7,6 +7,11 @@ Find out where in the sky your picture was taken – and what is in it.<br>
 Free and open source for Windows, macOS and Linux · GPL-3.0-or-later
 </p>
 
+<p align="center">
+<a href="../../releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Coffymonk/PlateSolver"></a>
+<a href="LICENSE"><img alt="Licence: GPL-3.0-or-later" src="https://img.shields.io/badge/licence-GPL--3.0--or--later-blue"></a>
+</p>
+
 PlateSolver plate solves your astrophotos and shows every galaxy, nebula, star cluster and bright star in
 them, with its distance and true size in light-years. It works with telescope images, camera-lens Milky Way
 shots and even phone photos – no experience with astronomy software needed.
@@ -28,11 +33,25 @@ shots and even phone photos – no experience with astronomy software needed.
 - **Overlays:** RA/Dec grid, constellation figures and names, and a north/east compass.
 - **Equipment profiles** for telescopes, DSLR and mirrorless cameras, smartphones and photos of a screen,
   chosen automatically from the image's own camera information.
+- **Photos of a screen:** recognises a phone photo of a tablet or monitor showing stars, straightens it,
+  selects the star area and hides the app's text and buttons before solving.
 - **Help for difficult images:** object hints ("this is M101"), uneven backgrounds, a starless-image check,
-  phone and wide-field aids, lens distortion correction, and **Crop and rotate** to solve only part of an image.
+  phone and wide-field aids, lens distortion correction, and **Crop and rotate** to solve only part of an
+  image – with areas you can hide, such as a roof, a tree or app menus.
 - **Export** an annotated image, the object list (CSV) or the plate solution (.wcs, or into the FITS header),
   and **batch solve** whole folders.
 - A built-in manual, and two astronomy quizzes with 1,000 questions each.
+
+## What's new in 0.9.8
+
+- **Photos of a screen are recognised:** a bar above the image offers the profile *Photo of a screen or
+  print* and to crop to the stars. Nothing changes unless you click (switch it off in Settings › Profiles).
+- **Crop and rotate** has **Find the star area** (straightens a photographed screen and selects the stars),
+  **Find app text and buttons**, and **Areas to hide**: rectangles over anything that isn't sky are filled
+  with the sky colour before solving.
+- The manual gives the location of the built-in quiz files in the Windows, macOS and Linux apps.
+
+Earlier versions: see [Releases](../../releases) and *What's new* in the manual (Help › Manual).
 
 ## Download
 
