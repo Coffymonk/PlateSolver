@@ -42,6 +42,9 @@ class GeneralSettings(SettingsSection):
             SettingField("hover_light", "Card: when the light left the object", BOOL, True,
                          help="E.g. 'The light in your image left it around the year 680'."),
             SettingField("size_column", "Show a Size column in the object list", BOOL, True),
+            SettingField("opens_column", "Show an Opens column in the object list", BOOL, True,
+                         help="Where double-clicking an object leads: Wikipedia when there is an article, otherwise "
+                              "SIMBAD (or another source)."),
             SettingField("overlay_follows_filter", "Only mark objects that pass the list's search and filter",
                          BOOL, True, help="When off, all objects stay marked on the image while you filter the list."),
             SettingField("click_opens", "Double-clicking an object on the image opens its information", BOOL, True,

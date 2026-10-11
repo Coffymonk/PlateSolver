@@ -129,6 +129,7 @@ class ImageView(QGraphicsView):
     file_dropped = Signal(str)
     crop_changed = Signal()               # the crop selection changed (crop mode)
     hidden_changed = Signal()             # the hidden areas changed (crop mode, tool "hide")
+    quad_changed = Signal()               # a screen corner was moved (crop mode, tool "corners")
 
     MIN_ZOOM, MAX_ZOOM = 0.02, 32.0
 
@@ -152,6 +153,7 @@ class ImageView(QGraphicsView):
         self._drag = None                     # (kind, start scene point, start rect) while dragging the selection
         self._tool = "select"                 # crop mode: "select" the area to keep, or "hide" app marks
         self._hidden: list[QRectF] = []       # areas to fill with sky (crop mode)
+        self._quad: list[QPointF] | None = None   # screen corners TL, TR, BR, BL (crop mode, tool "corners")
         self._pan = None                      # last mouse position while panning in crop mode
 
     # ------------------------------------------------------------------ image
@@ -239,6 +241,11 @@ class ImageView(QGraphicsView):
     def mousePressEvent(self, event):
         self._press_pos = event.position()
         if self._crop_mode and self._pixmap is not None:
+            if event.button() == Qt.LeftButton and self._tool == "corners":
+                i = self._corner_hit(event.position())
+                if i is not None:
+                    self._drag = ("corner", i, None)
+                return
             if event.button() == Qt.LeftButton and self._tool == "hide":
                 p = self._clamp_point(self.mapToScene(event.position().toPoint()))
                 self._hidden.append(QRectF(p, p))
@@ -260,6 +267,11 @@ class ImageView(QGraphicsView):
 
     def mouseReleaseEvent(self, event):
         if self._crop_mode:
+            if self._drag is not None and self._drag[0] == "corner" and event.button() == Qt.LeftButton:
+                self._drag = None
+                self.quad_changed.emit()
+                self._crop_cursor(event.position())
+                return
             if self._drag is not None and self._drag[0] == "hide" and event.button() == Qt.LeftButton:
                 self._drag = None
                 r = self._hidden.pop().normalized() if self._hidden else QRectF()
@@ -338,6 +350,7 @@ class ImageView(QGraphicsView):
         self._drag = self._pan = None
         self._tool = "select"
         self._hidden = []
+        self._quad = None
         self.setDragMode(QGraphicsView.NoDrag if on else QGraphicsView.ScrollHandDrag)
         if on:
             self.viewport().setCursor(Qt.CrossCursor)
@@ -356,10 +369,33 @@ class ImageView(QGraphicsView):
         return x0, y0, max(0, x1 - x0), max(0, y1 - y0)
 
     def set_crop_tool(self, tool: str):
-        """'select' draws the area to keep; 'hide' draws areas to hide (click one to remove it)."""
-        self._tool = "hide" if tool == "hide" else "select"
+        """'select' draws the area to keep; 'hide' draws areas to hide (click one to remove it); 'corners'
+        moves the four screen corners."""
+        self._tool = tool if tool in ("hide", "corners") else "select"
         self._drag = None
         self.viewport().setCursor(Qt.CrossCursor)
+        self._update_crop_items()
+
+    def quad(self) -> tuple | None:
+        """The screen corners (TL, TR, BR, BL) as (x, y) image pixels, or None."""
+        if self._quad is None:
+            return None
+        return tuple((float(p.x()), float(p.y())) for p in self._quad)
+
+    def set_quad(self, quad):
+        self._quad = None if quad is None else [QPointF(x, y) for x, y in quad]
+        self._update_crop_items()
+
+    def _corner_hit(self, pos) -> int | None:
+        if self._quad is None:
+            return None
+        best, best_i = self.HANDLE_PX * 2.0, None
+        for i, p in enumerate(self._quad):
+            v = self.mapFromScene(p)
+            d = math.hypot(v.x() - pos.x(), v.y() - pos.y())
+            if d <= best:
+                best, best_i = d, i
+        return best_i
 
     def crop_tool(self) -> str:
         return self._tool
@@ -415,6 +451,10 @@ class ImageView(QGraphicsView):
         return "move" if tl.x() < x < br.x() and tl.y() < y < br.y() else None
 
     def _crop_cursor(self, pos):
+        if self._crop_mode and self._tool == "corners":
+            over = self._corner_hit(pos) is not None
+            self.viewport().setCursor(Qt.SizeAllCursor if over else Qt.ArrowCursor)
+            return
         if self._crop_mode and self._tool == "hide":
             p = self.mapToScene(pos.toPoint())
             over = any(h.contains(p) for h in self._hidden)
@@ -429,6 +469,11 @@ class ImageView(QGraphicsView):
 
     def _drag_crop(self, p: QPointF):
         kind, start, rect0 = self._drag
+        if kind == "corner":
+            if self._quad is not None:
+                self._quad[start] = self._clamp_point(p)
+            self._update_crop_items()
+            return
         if kind == "hide":
             if self._hidden:
                 self._hidden[-1] = QRectF(start, self._clamp_point(p)).normalized()
@@ -462,6 +507,9 @@ class ImageView(QGraphicsView):
             self.scene().removeItem(item)
         self._crop_items = []
         if not self._crop_mode or self._pixmap is None:
+            return
+        if self._tool == "corners":
+            self._draw_quad()
             return
         area = self.sceneRect()
         shade = QPainterPath()
@@ -512,6 +560,36 @@ class ImageView(QGraphicsView):
         label.setZValue(203)
         self.scene().addItem(label)
         self._crop_items.append(label)
+
+    def _draw_quad(self):
+        if self._quad is None:
+            return
+        path = QPainterPath()
+        path.moveTo(self._quad[0])
+        for p in self._quad[1:]:
+            path.lineTo(p)
+        path.closeSubpath()
+        outside = QPainterPath()
+        outside.addRect(self.sceneRect())
+        dim = QGraphicsPathItem(outside.subtracted(path))
+        dim.setBrush(QBrush(QColor(0, 0, 0, 110)))
+        dim.setPen(QPen(Qt.NoPen))
+        dim.setZValue(200)
+        self.scene().addItem(dim)
+        self._crop_items.append(dim)
+        for color, width, style in (("#000000", 3.0, Qt.SolidLine), ("#3fd2ff", 1.5, Qt.DashLine)):
+            pen = QPen(QColor(color), width, style)
+            pen.setCosmetic(True)
+            item = self.scene().addPath(path, pen)
+            item.setZValue(201)
+            self._crop_items.append(item)
+        r = 6.0 / max(self.zoom(), 1e-6)
+        pen = QPen(QColor("#000000"), 1.0)
+        pen.setCosmetic(True)
+        for p in self._quad:
+            h = self.scene().addEllipse(QRectF(p.x() - r, p.y() - r, 2 * r, 2 * r), pen, QBrush(QColor("#3fd2ff")))
+            h.setZValue(202)
+            self._crop_items.append(h)
 
     # ------------------------------------------------------------------ drag & drop
     def dragEnterEvent(self, event):

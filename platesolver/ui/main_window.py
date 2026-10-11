@@ -8,8 +8,8 @@ import math
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QByteArray, QPoint, Qt, QTimer, QUrl
-from PySide6.QtGui import QAction, QCursor, QDesktopServices, QKeySequence, QShortcut
+from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, QTimer, QUrl
+from PySide6.QtGui import QAction, QActionGroup, QCursor, QDesktopServices, QKeySequence, QShortcut
 from PySide6.QtWidgets import (QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox,
                                QSizePolicy, QSplitter, QStyle, QToolBar, QToolButton, QVBoxLayout, QWidget)
 
@@ -36,26 +36,6 @@ from platesolver.ui.sidebar import Sidebar, object_menu, open_first_link
 from platesolver.ui.workers import TaskWorker
 
 log = logging.getLogger(__name__)
-
-
-def hamburger_icon(color: str = "#d6dbe3"):
-    """Three-line 'menu' icon, drawn so it is crisp at any screen scaling."""
-    from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
-    icon = QIcon()
-    for size in (16, 20, 24, 32, 48):
-        pm = QPixmap(size, size)
-        pm.fill(Qt.transparent)
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.Antialiasing)
-        pen = QPen(QColor(color), max(1.5, size / 9))
-        pen.setCapStyle(Qt.RoundCap)
-        p.setPen(pen)
-        for frac in (0.28, 0.5, 0.72):
-            y = size * frac
-            p.drawLine(int(size * 0.18), int(y), int(size * 0.82), int(y))
-        p.end()
-        icon.addPixmap(pm)
-    return icon
 
 
 def play_icon(color: str = "#3ecf6a", disabled: str = "#4a505b"):
@@ -93,6 +73,8 @@ class MainWindow(QMainWindow):
         self.general = store.section(self.general_section)
         self.equipment_section = EquipmentSettings()
         EquipmentSettings.migrate(store)
+        from platesolver.core.profiles import ProfileSettings
+        ProfileSettings.migrate(store)
         self.equipment = store.section(self.equipment_section)
         self.export_section = ExportSettings()
         self.export = store.section(self.export_section)
@@ -118,6 +100,8 @@ class MainWindow(QMainWindow):
         self.image: ImageData | None = None
         self.original_image: ImageData | None = None   # as opened; self.image differs after Crop and rotate
         self._crop_q, self._crop_angle, self._crop_base_rgb = 0, 0.0, None
+        self._crop_quad, self._crop_quad_manual = None, False   # screen corners (perspective), set by hand?
+        self._last_edit = None                  # the Crop and rotate edit behind the image shown
         self.result: SolveResult | None = None
         self.objects: list[SkyObject] = []
         self.worker: TaskWorker | None = None
@@ -179,6 +163,7 @@ class MainWindow(QMainWindow):
         self.crop_bar.find_area_requested.connect(self.find_star_area)
         self.crop_bar.find_marks_requested.connect(self.find_app_marks)
         self.crop_bar.tool_changed.connect(self._crop_tool_changed)
+        self.view.quad_changed.connect(lambda: setattr(self, "_quad_moved", True))
         self.view.hidden_changed.connect(self._crop_selection_changed)
         self._crop_keys = []
         for key, slot in (("Esc", self.cancel_crop), ("Return", lambda: self.apply_crop(True)),
@@ -228,9 +213,10 @@ class MainWindow(QMainWindow):
         self.act_solve_hint = act("Solve with object hint…", self.solve_with_hint, "Shift+F5", None,
                                   "Tell PlateSolver what the image shows, e.g. M101 (Shift+F5)")
         self.act_cancel = act("Cancel", self.cancel, "Esc", QStyle.SP_BrowserStop, "Stop the running task")
-        self.act_settings = act("Settings", lambda: self.open_settings(), "Ctrl+,")
-        self.act_settings.setIcon(hamburger_icon())
-        self.act_settings.setToolTip("Settings (Ctrl+,)")
+        self.act_settings = act("Settings…", lambda: self.open_settings(), QKeySequence.Preferences)
+        if self.act_settings.shortcut().isEmpty():             # Windows and Linux have no standard key
+            self.act_settings.setShortcut(QKeySequence("Ctrl+,"))
+        self.act_settings.setMenuRole(QAction.PreferencesRole)  # macOS: PlateSolver › Settings… (⌘,)
         self.act_export_img = act("Export annotated image…", self.export_image, "Ctrl+E",
                                   QStyle.SP_DialogSaveButton, "Save the image with its labels (Ctrl+E)")
         self.act_export_csv = act("Export object list (CSV)…", self.export_csv, "Ctrl+Shift+E")
@@ -257,6 +243,7 @@ class MainWindow(QMainWindow):
         tb = QToolBar("Main")
         tb.setMovable(False)
         tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        tb.setIconSize(QSize(16, 16))
         for a in (self.act_open, self.act_solve, self.act_cancel):
             tb.addAction(a)
         tb.addSeparator()
@@ -276,19 +263,7 @@ class MainWindow(QMainWindow):
         tb.addAction(self.act_original_tb)
         tb.addSeparator()
         tb.addAction(self.act_export_img)
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        tb.addWidget(spacer)            # pushes the rest to the right edge
-        self.help_menu = QMenu("Help", self)
-        help_btn = QToolButton()
-        help_btn.setText("Help")
-        help_btn.setToolTip("Manual, shortcuts and troubleshooting (F1 opens the manual)")
-        help_btn.setToolButtonStyle(Qt.ToolButtonTextOnly)
-        help_btn.setPopupMode(QToolButton.InstantPopup)
-        help_btn.setMenu(self.help_menu)
-        help_btn.setStyleSheet("QToolButton::menu-indicator { image: none; width: 0; }")
-        tb.addWidget(help_btn)
-        tb.addAction(self.act_settings)  # rightmost
+        self.toolbar = tb
         self.addToolBar(tb)
 
         mb = self.menuBar()
@@ -321,6 +296,11 @@ class MainWindow(QMainWindow):
         m = mb.addMenu("&Tools")
         m.addAction(self.act_batch)
         m.addSeparator()
+        self.profile_menu = QMenu("Profile", self)             # same list as the toolbar, as radio items
+        self.profile_menu.setToolTipsVisible(True)
+        self.profile_group = QActionGroup(self)
+        self.profile_group.setExclusive(True)
+        m.addMenu(self.profile_menu)
         m.addAction(act("Profiles…", lambda: self.open_profiles(), "Ctrl+P"))
         m.addAction(act("Install ASTAP and star databases…", lambda: self.open_astap_setup()))
         m.addAction(self.act_settings)
@@ -340,9 +320,8 @@ class MainWindow(QMainWindow):
                       None,
                       act("Licence and credits…", self.open_licence),
                       act("About", self._about)]
-        for menu in (m, self.help_menu):
-            for a in help_items:
-                menu.addSeparator() if a is None else menu.addAction(a)
+        for a in help_items:
+            m.addSeparator() if a is None else m.addAction(a)
 
     def _build_overlay_menu(self):
         self.overlay_menu.clear()
@@ -465,16 +444,24 @@ class MainWindow(QMainWindow):
             return image, self._display_rgb(image), self._screen_guess(image)
         self._run(work, self._opened, f"Opening {path.name}…")
 
+    def _screen_setting(self, key: str):
+        from platesolver.core.profiles import ProfileSettings
+        return self.store.section(ProfileSettings()).get(key)
+
+    def _screen_profile_active(self) -> bool:
+        prof = self.pipeline.profiles.active()
+        return prof is not None and prof.kind == "screen"
+
     def _screen_guess(self, image):
         """For a photo that may show a screen: where the stars are (or None). Runs in the opening task."""
-        prof = self.pipeline.profiles.active()
-        if not self.store.get("profiles", "suggest_screen", True) or (prof is not None and prof.kind == "screen"):
+        if self._screen_setting("screen_on_open") == "off":
             return None
         if image.format.upper() not in ("JPEG", "JPG", "PNG", "HEIC", "HEIF", "TIFF"):
             return None
         try:
             from platesolver.core.screendetect import find_star_area
-            guess = find_star_area(image.luminance())
+            perspective = self._screen_profile_active() and self._screen_setting("perspective") == "always"
+            guess = find_star_area(image.luminance(), perspective=perspective)
         except Exception:
             log.exception("Screen detection failed")
             return None
@@ -487,6 +474,7 @@ class MainWindow(QMainWindow):
             self._end_crop_mode()
         self.image, self.result, self.objects, self.selected = image, None, [], None
         self.original_image = image
+        self._last_edit = None
         self._rgb = rgb
         self.view.clear_layers()
         self.view.set_image(rgb8_to_qimage(rgb))
@@ -501,7 +489,10 @@ class MainWindow(QMainWindow):
             self._refresh_profiles()
         self._update_actions()
         if screen is not None:
-            self._suggest_screen_profile(screen)
+            if self._screen_profile_active() and self._screen_setting("screen_on_open") == "auto":
+                QTimer.singleShot(0, lambda: self._auto_crop_screen(screen))   # after the opening task ends
+            else:
+                self._suggest_screen_profile(screen)
         elif self.general.get("auto_solve"):
             QTimer.singleShot(0, self.solve)
 
@@ -546,12 +537,51 @@ class MainWindow(QMainWindow):
             tip += "\n\nStill needed:\n• " + "\n• ".join(missing)
         combo.setToolTip(tip + "\n\nTools › Profiles… to create or edit profiles")
         combo.blockSignals(False)
+        self._refresh_profile_menu(users, mgr)
+
+    def _refresh_profile_menu(self, users, mgr):
+        """Tools › Profile ▸: the same profiles as the toolbar list, the active one ticked."""
+        menu = self.profile_menu
+        for a in self.profile_group.actions():
+            self.profile_group.removeAction(a)
+        menu.clear()
+
+        def add(name, pid, tip=""):
+            a = menu.addAction(name)
+            a.setCheckable(True)
+            a.setChecked(pid == mgr.active_id)
+            a.setData(pid)
+            if tip:
+                a.setToolTip(tip)
+            self.profile_group.addAction(a)
+            a.triggered.connect(lambda _=False, pid=pid: QTimer.singleShot(0, lambda: self._choose_profile(pid)))
+            # (later, because choosing rebuilds this menu and deletes the action that is firing)
+        for p in users:
+            add(p.name, p.id, p.summary())
+        if users:
+            menu.addSeparator()
+        for p in mgr.profiles():
+            if p.builtin:
+                add(p.name.replace("Template: ", "Template – "), p.id, p.summary())
+        if mgr.active() is None:
+            menu.insertSeparator(menu.actions()[0] if menu.actions() else None)
+            first = menu.actions()[0] if menu.actions() else None
+            none = QAction("(no profile – own settings)", menu)
+            none.setCheckable(True)
+            none.setChecked(True)
+            none.setEnabled(False)
+            menu.insertAction(first, none)
+            self.profile_group.addAction(none)
 
     def _profile_picked(self, index: int):
         pid = self.profile_combo.itemData(index)
         if pid == "__manage__":
+            self._refresh_profiles()             # don't leave "Manage profiles…" shown as the choice
             self.open_profiles()
             return
+        self._choose_profile(pid)
+
+    def _choose_profile(self, pid: str):
         prof = self.pipeline.profiles.get(pid) if pid else None
         if prof is None:
             return
@@ -715,6 +745,9 @@ class MainWindow(QMainWindow):
             self.sidebar.setCurrentWidget(self.sidebar.solution)
             self.view.clear_layers()
             self._update_actions()
+            if self._perspective_retry_possible():
+                QTimer.singleShot(0, self._retry_with_perspective)
+                return
             if self._offer_astap_setup():
                 return
             skipped = any(a.startswith("Star check") for a in (result.attempts or []))
@@ -728,6 +761,65 @@ class MainWindow(QMainWindow):
         self._show_objects()
         self.render_overlays()
         self._update_actions()
+
+    # ------------------------------------------------------------------ perspective retry (photos of a screen)
+    def _perspective_retry_possible(self) -> bool:
+        return (self.image is not None and self.original_image is not None
+                and self._screen_setting("perspective") == "if_fails" and self._screen_profile_active()
+                and (self._last_edit.quad is None if self.edited() and self._last_edit is not None
+                     else not self.edited())
+                and getattr(self, "_perspective_tried_for", None) is not self.original_image
+                and self.original_image.format.upper() in ("JPEG", "JPG", "PNG", "HEIC", "HEIF", "TIFF"))
+
+    def _retry_with_perspective(self):
+        """Solving a photo of a screen failed: square up the screen (if its edges are found) and solve again."""
+        import copy as _copy
+        from platesolver.core.imageedit import (Edit, describe, edited_image, map_rect, rotate_array,
+                                                square_size)
+        from platesolver.core.screendetect import find_screen_quad, find_star_area
+        self._perspective_tried_for = self.original_image
+        base, shown = self.original_image, self.image
+        edit = self._last_edit or Edit()
+
+        def work(ctx):
+            lum = rotate_array(base.luminance(), edit.quarter_turns, edit.angle_deg)
+            guess = find_star_area(lum, angle=0.0)
+            quad = find_screen_quad(lum, guess) if guess.crop is not None else None
+            if quad is None:
+                ctx.log("Perspective: the screen's edges were not found clearly enough to square it up")
+                return None
+            w, h = square_size(quad)
+            crop = map_rect(edit.crop, quad, w, h) if edit.crop else None
+            hide = [r for r in (map_rect(r, quad, w, h) for r in (edit.hide or [])) if r]
+            new_edit = Edit(edit.quarter_turns, edit.angle_deg, crop, hide=hide, quad=quad)
+            new = edited_image(base, new_edit)
+            new.hints = _copy.deepcopy(shown.hints)          # object hints and profile changes made meanwhile
+            ctx.log(f"Solving failed – trying again with the perspective corrected ({describe(new_edit)})")
+            result = self.pipeline.solve(new, ctx)
+            objects = self.pipeline.find_objects(new, result, ctx) if result.success else []
+            return new, self._display_rgb(new), new_edit, result, objects
+
+        def done(payload):
+            if payload is None:
+                self._not_solved_followups(self.result)
+                return
+            new, rgb, new_edit, result, objects = payload
+            self.image, self._rgb, self._last_edit = new, rgb, new_edit
+            self.view.clear_layers()
+            self.view.set_image(rgb8_to_qimage(rgb), keep_view=False)
+            self.setWindowTitle(f"{new.path.name} (edited) – {APP_NAME}")
+            self._solved((result, objects))
+        self._run(work, done, "Correcting the perspective and solving again…")
+
+    def _not_solved_followups(self, result):
+        """After a failed solve: offer ASTAP setup or an object hint (each once)."""
+        if result is None or self._offer_astap_setup():
+            return
+        skipped = any(a.startswith("Star check") for a in (result.attempts or []))
+        if (self.pipeline.hint_settings.get("ask_on_failure") and not skipped and self.image is not None
+                and getattr(self, "_hint_offered_for", None) is not self.image):
+            self._hint_offered_for = self.image
+            QTimer.singleShot(0, self._offer_hint)
 
     def _offer_hint(self):
         hinted = self.image.hints.position_hint
@@ -753,7 +845,8 @@ class MainWindow(QMainWindow):
                 self.log(f"Problem: {e}")
         decimals = int(self.general.get("ly_decimals"))
         if self.objects:
-            self.sidebar.objects.set_objects(self.objects, decimals, note, bool(self.general.get("size_column")))
+            self.sidebar.objects.set_objects(self.objects, decimals, note, bool(self.general.get("size_column")),
+                                             bool(self.general.get("opens_column")))
             self.sidebar.setCurrentWidget(self.sidebar.objects)
         elif not self.registry.of_kind(CatalogProvider):
             self.sidebar.objects.set_message(
@@ -934,6 +1027,7 @@ class MainWindow(QMainWindow):
             self._update_actions()
             return
         self._crop_q, self._crop_angle = 0, 0.0
+        self._crop_quad, self._crop_quad_manual = None, False
         self._crop_base_rgb = self._rgb
         self.hover_card.hide()
         self._hovered = None
@@ -948,11 +1042,13 @@ class MainWindow(QMainWindow):
         self.set_status("Crop and rotate: drag a rectangle on the image, then Apply and solve (Enter)")
         self._update_actions()
 
-    def _crop_preview(self):
-        from platesolver.core.imageedit import rotate_array
+    def _crop_preview(self, squared: bool = True):
+        from platesolver.core.imageedit import rotate_array, square_up
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             rgb = rotate_array(self._crop_base_rgb, self._crop_q, self._crop_angle)
+            if squared and self._crop_quad is not None:
+                rgb = square_up(rgb, self._crop_quad)
         finally:
             QApplication.restoreOverrideCursor()
         self._crop_preview_rgb = rgb
@@ -964,18 +1060,27 @@ class MainWindow(QMainWindow):
         if not self.view.crop_mode() or self.worker is not None:
             return
         self._crop_q = (self._crop_q + step) % 4
+        self._crop_quad, self._crop_quad_manual = None, False
+        self.crop_bar.set_tool("select")
+        self.view.set_crop_tool("select")
         self._crop_preview()
 
     def _crop_straighten(self, angle: float):
         if not self.view.crop_mode() or abs(angle - self._crop_angle) < 1e-9:
             return
         self._crop_angle = angle
+        self._crop_quad, self._crop_quad_manual = None, False
+        self.crop_bar.set_tool("select")
+        self.view.set_crop_tool("select")
         self._crop_preview()
 
     def _crop_reset(self):
         self.crop_bar.reset_angle()
-        changed = self._crop_q or self._crop_angle
+        changed = self._crop_q or self._crop_angle or self._crop_quad is not None
         self._crop_q, self._crop_angle = 0, 0.0
+        self._crop_quad, self._crop_quad_manual = None, False
+        self.crop_bar.set_tool("select")
+        self.view.set_crop_tool("select")
         if changed:
             self._crop_preview()
         else:
@@ -983,8 +1088,52 @@ class MainWindow(QMainWindow):
             self.view.set_hidden_rects([])
 
     def _crop_tool_changed(self, tool: str):
+        was = self.view.crop_tool()
+        if tool == "corners" and was != "corners":
+            self._enter_corners()
+        elif was == "corners" and tool != "corners":
+            self._leave_corners()
         self.view.set_crop_tool(tool)
         self._crop_selection_changed()
+
+    def _enter_corners(self):
+        """Screen corners: show the picture without the perspective correction and the four corners on it."""
+        quad = self._crop_quad
+        if quad is None:
+            from platesolver.core.imageedit import rotate_array
+            from platesolver.core.screendetect import find_screen_quad, find_star_area
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                lum = rotate_array(self.image.luminance(), self._crop_q, self._crop_angle)
+                guess = find_star_area(lum, angle=0.0)
+                quad = find_screen_quad(lum, guess) if guess.crop is not None else None
+            except Exception:
+                log.exception("Finding the screen corners failed")
+                quad = None
+            finally:
+                QApplication.restoreOverrideCursor()
+        self._crop_preview(squared=False)
+        if quad is None:                            # start from a rectangle a little inside the picture
+            r = self.view.sceneRect()
+            w, h = r.width(), r.height()
+            quad = ((w * 0.1, h * 0.1), (w * 0.9, h * 0.1), (w * 0.9, h * 0.9), (w * 0.1, h * 0.9))
+        self._quad_moved = False
+        self.view.set_quad(quad)
+        self.set_status("Screen corners: drag the round handles onto the screen's corners, then choose Area to keep")
+
+    def _leave_corners(self):
+        """Back from Screen corners: square the picture up with the corners shown."""
+        from platesolver.core.imageedit import keystone
+        quad = self.view.quad()
+        if quad is None:
+            return
+        if self._quad_moved:
+            self._crop_quad_manual = True
+        self._crop_quad = quad
+        self.view.set_quad(None)
+        self._crop_preview()
+        self.log(f"Perspective corrected with the screen corners ({keystone(quad) * 100:.1f} % from a rectangle) – "
+                 "select the area to keep, or use Find the star area")
 
     def find_star_area(self, guess=None):
         """Crop and rotate › Find the star area: straighten a photographed screen and select the stars."""
@@ -992,27 +1141,41 @@ class MainWindow(QMainWindow):
             return
         from platesolver.core.imageedit import rotate_array
         from platesolver.core.screendetect import find_star_area
+        from platesolver.core.imageedit import keystone, square_up
+        from platesolver.core.screendetect import _star_area
+        perspective = self._screen_profile_active() and self._screen_setting("perspective") == "always"
+        if self.view.crop_tool() == "corners":
+            self._leave_corners()
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            if guess is None or self._crop_q:
+            if self._crop_quad_manual and self._crop_quad is not None:
+                # corners set by hand: keep them and the angle, look for the stars in the squared-up picture
+                lum = rotate_array(self.image.luminance(), self._crop_q, self._crop_angle)
+                guess = _star_area(square_up(lum, self._crop_quad), 0.0)
+                guess.angle, guess.quad = self._crop_angle, self._crop_quad
+            elif guess is None or self._crop_q or (perspective and guess.quad is None):
                 lum = self.image.luminance()
                 if self._crop_q:
                     lum = rotate_array(lum, self._crop_q, 0.0)
-                guess = find_star_area(lum)
+                guess = find_star_area(lum, perspective=perspective)
         finally:
             QApplication.restoreOverrideCursor()
         if guess.crop is None:
             self.set_status("No area with stars found – drag the selection yourself")
             return
         self._crop_angle = guess.angle
+        self._crop_quad = guess.quad
         self.crop_bar.set_angle_value(guess.angle)
         self._crop_preview()
         self.view.set_crop_rect(guess.crop)
         self.crop_bar.set_tool("select")
         self.view.set_crop_tool("select")
         msg = f"Star area selected ({guess.crop[2]} × {guess.crop[3]} px"
-        msg += f", straightened {abs(guess.angle):g}° {'clockwise' if guess.angle > 0 else 'anticlockwise'})" \
-            if guess.angle else ")"
+        if guess.angle:
+            msg += f", straightened {abs(guess.angle):g}° {'clockwise' if guess.angle > 0 else 'anticlockwise'}"
+        if guess.quad is not None:
+            msg += f", perspective corrected {keystone(guess.quad) * 100:.1f} %"
+        msg += ")"
         self.log(msg)
         self.set_status(msg + " – adjust it if needed")
 
@@ -1042,8 +1205,29 @@ class MainWindow(QMainWindow):
             self.view.set_crop_tool("hide")
         self._crop_selection_changed()
 
+    def _auto_crop_screen(self, guess):
+        """The screen profile is chosen and the photo shows a screen: open Crop and rotate with the stars
+        selected and the app's marks hidden, ready to apply."""
+        self.start_crop()
+        self.find_star_area(guess)
+        self.find_app_marks()
+        self.crop_bar.set_tool("select")
+        self.view.set_crop_tool("select")
+        self._crop_selection_changed()
+        self.log("Photo of a screen recognised: cropped to the stars and the app's text and buttons marked "
+                 "(Settings › Profiles › When a photo of a screen is opened)")
+        self.suggest_bar.show_suggestion(
+            "<b>This looks like a photo of a screen.</b> The star area is selected and the app's text and buttons "
+            "are marked in red. Adjust them if needed.",
+            [("Apply and solve", lambda: self.apply_crop(True)), ("Show the whole photo", self.cancel_crop)])
+
     def _suggest_screen_profile(self, guess):
         """A bar above the image offering the screen profile (and cropping to the stars)."""
+        if self._screen_profile_active():            # setting "only suggest", profile already chosen
+            self.suggest_bar.show_suggestion(
+                "<b>This looks like a photo of a screen.</b> Crop to the stars and hide the app's text and buttons?",
+                [("Crop to the stars", lambda: self._auto_crop_screen(guess)), ("No, thanks", lambda: None)])
+            return
         mgr = self.pipeline.profiles
         prof = next((p for p in mgr.user_profiles() if p.kind == "screen"), None) or mgr.get("tpl-screen")
         if prof is None:
@@ -1074,13 +1258,14 @@ class MainWindow(QMainWindow):
     def _end_crop_mode(self):
         self.view.set_crop_mode(False)
         self.crop_bar.hide()
+        self.suggest_bar.hide()
         self._crop_base_rgb = None
         self._update_actions()
 
     def cancel_crop(self):
         if not self.view.crop_mode() or self.worker is not None:
             return
-        changed = self._crop_q or self._crop_angle
+        changed = self._crop_q or self._crop_angle or self._crop_quad is not None
         self._end_crop_mode()
         if changed:
             self.view.set_image(rgb8_to_qimage(self._rgb))
@@ -1091,6 +1276,8 @@ class MainWindow(QMainWindow):
         if not self.view.crop_mode() or self.worker is not None or self.image is None:
             return
         from platesolver.core.imageedit import Edit, clamp_crop, describe, edited_image
+        if self.view.crop_tool() == "corners":
+            self._leave_corners()
         sel = self.view.crop_rect()
         rect = self.view.sceneRect()
         try:
@@ -1098,7 +1285,7 @@ class MainWindow(QMainWindow):
         except ValueError as exc:
             QMessageBox.information(self, APP_NAME, str(exc))
             return
-        edit = Edit(self._crop_q, self._crop_angle, crop, hide=self.view.hidden_rects())
+        edit = Edit(self._crop_q, self._crop_angle, crop, hide=self.view.hidden_rects(), quad=self._crop_quad)
         if edit.is_identity():
             self.cancel_crop()
             if solve and not (self.result and self.result.success):
@@ -1106,6 +1293,7 @@ class MainWindow(QMainWindow):
             return
         base = self.image
         self._end_crop_mode()
+        self._pending_edit = edit if base is self.original_image else None
 
         def work(ctx):
             new = edited_image(base, edit)
@@ -1114,6 +1302,8 @@ class MainWindow(QMainWindow):
 
     def _crop_applied(self, payload):
         new, rgb, text, solve = payload
+        # the edit from the original image; None when an edited view was edited again (then no retry)
+        self._last_edit = getattr(self, "_pending_edit", None)
         self.image, self.result, self.objects, self.selected = new, None, [], None
         self._rgb = rgb
         self.view.clear_layers()
@@ -1147,6 +1337,7 @@ class MainWindow(QMainWindow):
             self.setWindowTitle(f"{img.path.name} – {APP_NAME}")
             self.sidebar.solution.display(img, None)
             self.sidebar.objects.set_message("Solve the image to list the objects in it.")
+            self._last_edit = None
             self.log(f"Back to the original image ({img.width} × {img.height})")
             self.set_status(f"Original image {img.width} × {img.height}")
             self._update_actions()

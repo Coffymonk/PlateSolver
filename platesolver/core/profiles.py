@@ -19,7 +19,7 @@ import uuid
 from dataclasses import dataclass, field
 
 from platesolver.core import cameras
-from platesolver.core.settings import BOOL, SettingField, SettingsSection
+from platesolver.core.settings import BOOL, CHOICE, SettingField, SettingsSection
 
 PROFILE_KEYS = {
     "equipment": ("focal_length", "pixel_size", "sensor_width", "sensor_height", "detect_drizzle",
@@ -121,10 +121,30 @@ class ProfileSettings(SettingsSection):
                              True, help="E.g. a FITS from a ZWO camera uses your astro-camera profile, a photo "
                                         "with Apple or Samsung EXIF the smartphone profile. The Log says "
                                         "when the profile changes."),
-                SettingField("suggest_screen", "Suggest the screen profile for photos of a screen", BOOL, True,
-                             help="When a photo looks like a picture of a tablet or monitor showing stars, a bar "
-                                  "above the image offers the profile 'Photo of a screen or print' and to crop to "
-                                  "the star area. Nothing changes unless you click it.")]
+                SettingField("screen_on_open", "When a photo of a screen is opened", CHOICE, "auto", choices=[
+                    ("auto", "Crop to the stars automatically if the screen profile is chosen, otherwise suggest it"),
+                    ("suggest", "Only suggest the screen profile and cropping"),
+                    ("off", "Do nothing")],
+                    help="A photo of a tablet or monitor showing stars is recognised when it is opened. With the "
+                         "profile 'Photo of a screen or print' already chosen, Crop and rotate opens with the star "
+                         "area selected and the app's text and buttons marked – check it, then Apply and solve. "
+                         "Otherwise a bar above the image offers the profile; nothing changes unless you click it."),
+                SettingField("perspective", "Correct the perspective of photos of a screen", CHOICE, "if_fails",
+                             choices=[("always", "Always, when the screen's four edges are found"),
+                                      ("if_fails", "Only when solving fails (one more try)"),
+                                      ("off", "Never")],
+                             help="A screen photographed a little from the side is not quite a rectangle, so its "
+                                  "stars are slightly out of place. PlateSolver finds the screen's edges and squares "
+                                  "the picture up. Crop and rotate › Screen corners does it by hand. Only used with "
+                                  "the profile 'Photo of a screen or print'.")]
+
+    @staticmethod
+    def migrate(store) -> None:
+        """0.9.9: 'Suggest the screen profile' (on/off) became 'When a photo of a screen is opened'."""
+        if not store.get("profiles", "screen_on_open_099"):
+            if store.get("profiles", "suggest_screen", True) is False:
+                store.set("profiles", "screen_on_open", "off")
+            store.set("profiles", "screen_on_open_099", True)
 
 
 TELESCOPE_DATABASES = ("d50", "d80", "v50", "d20", "h18", "h17", "d05")

@@ -79,7 +79,7 @@ class CropBar(QFrame):
     apply_requested = Signal(bool)        # True = solve right after
     find_area_requested = Signal()        # straighten and select the star area automatically
     find_marks_requested = Signal()       # mark the app's text and buttons as areas to hide
-    tool_changed = Signal(str)            # "select" (the area to keep) or "hide" (areas to hide)
+    tool_changed = Signal(str)            # "select" (the area to keep), "hide" (areas to hide) or "corners"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -158,16 +158,24 @@ class CropBar(QFrame):
         self.btn_hide.setCheckable(True)
         self.btn_hide.setToolTip("Drag rectangles over app text, buttons or anything that isn't sky; they are "
                                  "filled with the sky colour. Click one to remove it.")
-        for b in (self.btn_keep, self.btn_hide):
+        self.btn_corners = QToolButton()
+        self.btn_corners.setText("Screen corners")
+        self.btn_corners.setCheckable(True)
+        self.btn_corners.setToolTip("For a screen photographed a little from the side: drag the four round handles "
+                                    "onto the screen's corners. Choosing 'Area to keep' again squares the picture "
+                                    "up, so the stars get their true positions back.")
+        for b in (self.btn_keep, self.btn_hide, self.btn_corners):
             b.setStyleSheet("QToolButton { padding: 3px 8px; } QToolButton:checked { background: #2f6db5; "
                             "color: white; border-radius: 3px; }")
         self.btn_keep.clicked.connect(lambda: self.set_tool("select", emit=True))
         self.btn_hide.clicked.connect(lambda: self.set_tool("hide", emit=True))
+        self.btn_corners.clicked.connect(lambda: self.set_tool("corners", emit=True))
         row.addWidget(self.btn_keep)
         row.addWidget(self.btn_hide)
+        row.addWidget(self.btn_corners)
         row.addStretch(1)
         self.btn_reset = QPushButton("Reset")
-        self.btn_reset.setToolTip("Undo the rotation, the selection and the hidden areas")
+        self.btn_reset.setToolTip("Undo the rotation, the perspective correction, the selection and the hidden areas")
         self.btn_reset.clicked.connect(self.reset_requested)
         self.btn_cancel = QPushButton("Cancel")
         self.btn_cancel.setToolTip("Leave without changing the image (Esc)")
@@ -227,10 +235,11 @@ class CropBar(QFrame):
             w.blockSignals(False)
 
     def set_tool(self, tool: str, emit: bool = False):
-        hide = tool == "hide"
-        self.btn_keep.setChecked(not hide)
-        self.btn_hide.setChecked(hide)
-        self.tool = "hide" if hide else "select"
+        tool = tool if tool in ("hide", "corners") else "select"
+        self.btn_keep.setChecked(tool == "select")
+        self.btn_hide.setChecked(tool == "hide")
+        self.btn_corners.setChecked(tool == "corners")
+        self.tool = tool
         if emit:
             self.tool_changed.emit(self.tool)
 
@@ -240,7 +249,11 @@ class CropBar(QFrame):
         if hidden:
             tail = f" <b>{hidden} area{'s' if hidden != 1 else ''} hidden</b> (red); click one with " \
                    "<i>Areas to hide</i> to remove it."
-        if getattr(self, "tool", "select") == "hide":
+        if getattr(self, "tool", "select") == "corners":
+            self.hint.setText("<b>Screen corners.</b> Drag the four round handles onto the corners of the "
+                              "screen (or of the picture on it). Then choose <i>Area to keep</i>: the picture is "
+                              "squared up, as if photographed straight on. <i>Reset</i> undoes it.")
+        elif getattr(self, "tool", "select") == "hide":
             self.hint.setText("<b>Areas to hide.</b> Drag rectangles over app text, buttons, panels or anything "
                               "that isn't sky – they are filled with the sky colour before solving. Click a red "
                               "area to remove it." + (f" {hidden} hidden so far." if hidden else ""))

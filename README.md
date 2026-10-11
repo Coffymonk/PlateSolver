@@ -26,7 +26,7 @@ shots and even phone photos – no experience with astronomy software needed.
 - **Plate solves** them with [ASTAP](https://www.hnsky.org/astap.htm) on your own computer, or online with
   [astrometry.net](https://nova.astrometry.net). Images that already contain a solution open solved.
 - **Labels the objects** in the image from SIMBAD, OpenNGC and HyperLeda. Point at an object for an
-  information card; double-click it to read about it on Wikipedia or SIMBAD.
+  information card; double-click it to read about it on Wikipedia or SIMBAD – the object list shows which.
 - **Distances and sizes** in light-years, with the number of decimals you choose, and when the light left.
 - **Visible stars first:** finds the stars you can actually see in the image and labels them, and dims
   objects too faint to show.
@@ -34,7 +34,7 @@ shots and even phone photos – no experience with astronomy software needed.
 - **Equipment profiles** for telescopes, DSLR and mirrorless cameras, smartphones and photos of a screen,
   chosen automatically from the image's own camera information.
 - **Photos of a screen:** recognises a phone photo of a tablet or monitor showing stars, straightens it,
-  selects the star area and hides the app's text and buttons before solving.
+  corrects the perspective, selects the star area and hides the app's text and buttons before solving.
 - **Help for difficult images:** object hints ("this is M101"), uneven backgrounds, a starless-image check,
   phone and wide-field aids, lens distortion correction, and **Crop and rotate** to solve only part of an
   image – with areas you can hide, such as a roof, a tree or app menus.
@@ -42,14 +42,18 @@ shots and even phone photos – no experience with astronomy software needed.
   and **batch solve** whole folders.
 - A built-in manual, and two astronomy quizzes with 1,000 questions each.
 
-## What's new in 0.9.8
+## What's new in 0.9.9
 
-- **Photos of a screen are recognised:** a bar above the image offers the profile *Photo of a screen or
-  print* and to crop to the stars. Nothing changes unless you click (switch it off in Settings › Profiles).
-- **Crop and rotate** has **Find the star area** (straightens a photographed screen and selects the stars),
-  **Find app text and buttons**, and **Areas to hide**: rectangles over anything that isn't sky are filled
-  with the sky colour before solving.
-- The manual gives the location of the built-in quiz files in the Windows, macOS and Linux apps.
+- **Photos of a screen are cropped automatically** once the profile *Photo of a screen or print* is chosen:
+  Crop and rotate opens with the stars selected and the app's text and buttons marked, ready to apply.
+- **Perspective correction** for screens photographed from the side: PlateSolver finds the screen's edges
+  and squares the picture up – when solving fails (default), always, or never (Settings › Profiles).
+  **Screen corners** in Crop and rotate sets the corners by hand.
+- **Find app text and buttons** marks a whole panel as one area and leaves clumps of stars, glows and
+  satellite trails alone.
+- The object list has an **Opens** column: where double-clicking an object leads (Wikipedia, SIMBAD, …).
+- A tidier toolbar with smaller icons. **Settings** is under **Tools › Settings…** (Ctrl+,; on a Mac
+  **PlateSolver › Settings…**), Help is in the menu bar, and the profiles are also under **Tools › Profile**.
 
 Earlier versions: see [Releases](../../releases) and *What's new* in the manual (Help › Manual).
 

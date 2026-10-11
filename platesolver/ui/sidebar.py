@@ -68,8 +68,8 @@ class ObjectsPanel(QWidget):
     filter_changed = Signal()
     filter_saved = Signal(dict)       # the filter choices, to remember them between sessions
 
-    COLS = ("Object", "Distance", "Size", "Type")
-    DIST, SIZE, TYPE = 1, 2, 3
+    COLS = ("Object", "Distance", "Size", "Type", "Opens")
+    DIST, SIZE, TYPE, OPENS = 1, 2, 3, 4
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -139,7 +139,8 @@ class ObjectsPanel(QWidget):
         self._objects = []
         self.stack.setCurrentWidget(self.empty)
 
-    def set_objects(self, objects: list[SkyObject], decimals: int, note: str = "", size_column: bool = True):
+    def set_objects(self, objects: list[SkyObject], decimals: int, note: str = "", size_column: bool = True,
+                    opens_column: bool = True):
         self._objects = objects
         self._decimals = decimals
         self._note = note
@@ -149,7 +150,8 @@ class ObjectsPanel(QWidget):
         for obj in objects:
             dist = format_ly(obj.distance.light_years, decimals) if obj.distance else "–"
             size = size_text(obj, decimals) or "–"
-            it = _ObjectItem([obj.display_name, dist, size, obj.object_type])
+            first = obj.links[0] if obj.links else None
+            it = _ObjectItem([obj.display_name, dist, size, obj.object_type, link_source(first) if first else "–"])
             it.setData(0, Qt.UserRole, obj)
             if obj.extra.get("visible") is True:
                 it.setIcon(0, _visible_icon())
@@ -159,6 +161,10 @@ class ObjectsPanel(QWidget):
             tip = card_html(obj, decimals, **self.card_options)
             for col in range(len(self.COLS)):
                 it.setToolTip(col, tip)
+            it.setToolTip(self.OPENS, f"Double-click opens: {first.title}\n{first.url}" if first else
+                          "No information page found for this object")
+            if first is None:
+                it.setForeground(self.OPENS, QColor(theme.MUTED))
             if obj.distance and obj.distance.method == "redshift":
                 it.setForeground(self.DIST, QColor(theme.MUTED))
             self.tree.addTopLevelItem(it)
@@ -166,6 +172,7 @@ class ObjectsPanel(QWidget):
         self.tree.header().setSortIndicator(-1, Qt.AscendingOrder)
         self.tree.setSortingEnabled(True)
         self.tree.setColumnHidden(self.SIZE, not size_column)
+        self.tree.setColumnHidden(self.OPENS, not opens_column)
         for i in range(len(self.COLS)):
             self.tree.resizeColumnToContents(i)
         self.tree.setColumnWidth(0, min(self.tree.columnWidth(0) + 8, 190))
@@ -183,7 +190,7 @@ class ObjectsPanel(QWidget):
             counts[o.category] = counts.get(o.category, 0) + 1
         singular = {"galaxy": "galaxy", "nebula": "nebula", "cluster": "star cluster", "star": "star",
                     "other": "other"}
-        parts = [f"{n} {singular[c] if n == 1 else CATEGORY_LABELS.get(c, c).lower()}"
+        parts = [f"{n} {singular.get(c, c or 'other') if n == 1 else CATEGORY_LABELS.get(c, c or 'other').lower()}"
                  for c, n in counts.items()]
         with_dist = sum(1 for o in objects if o.distance)
         text = f"{len(objects)} objects: " + ", ".join(parts) + f". Distances for {with_dist}."
@@ -281,6 +288,22 @@ class ObjectsPanel(QWidget):
         if self.filter_panel.filter().active_count():
             menu.addAction("Reset the filter", self.filter_panel.reset)
         menu.exec(self.tree.viewport().mapToGlobal(pos))
+
+
+_KNOWN_SITES = {"wikipedia.org": "Wikipedia", "simbad": "SIMBAD", "ned.ipac": "NED", "leda": "HyperLeda",
+                "vizier": "VizieR", "wikisky": "WikiSky", "aladin": "Aladin"}
+
+
+def link_source(link) -> str:
+    """A short name for where a link leads: 'Wikipedia', 'SIMBAD', or the site's name."""
+    if getattr(link, "source", ""):
+        return link.source
+    host = QUrl(link.url).host().lower()
+    for key, name in _KNOWN_SITES.items():
+        if key in host:
+            return name
+    host = host[4:] if host.startswith("www.") else host
+    return host.split(".")[0].capitalize() if host else "Web page"
 
 
 def open_first_link(obj: SkyObject) -> bool:

@@ -11,7 +11,9 @@ Edits are made in two steps that both work on the shown (display-oriented) pixel
 
 1. rotation: quarter turns (exact) and an optional straightening angle (bilinear, canvas enlarged so
    nothing is cut off; the new corners are filled with the sky background);
-2. crop: a rectangle in the pixels of the rotated image.
+2. perspective (optional): four corners of a photographed screen in the rotated image are mapped onto a
+   rectangle ("squared up"), so a screen photographed a little from the side gets its true shape back;
+3. crop: a rectangle in the pixels of the (squared-up) image, and areas to hide inside it.
 
 `rotate_array` is used both for the preview (8-bit display pixels) and for the real data, with the same
 geometry, so the crop rectangle drawn on the preview selects the same pixels.
@@ -35,6 +37,7 @@ class Edit:
     angle_deg: float = 0.0             # straightening, positive = clockwise, -45…45
     crop: tuple[int, int, int, int] | None = None   # x, y, width, height in the rotated image
     hide: list = field(default_factory=list)          # areas (x, y, w, h) in the rotated image to fill with sky
+    quad: tuple | None = None          # screen corners (TL, TR, BR, BL) as (x, y) in the rotated image
 
     @property
     def rotation_deg(self) -> float:
@@ -42,7 +45,7 @@ class Edit:
 
     def is_identity(self) -> bool:
         return (self.quarter_turns % 4 == 0 and abs(self.angle_deg) < 1e-6 and self.crop is None
-                and not self.hide)
+                and not self.hide and self.quad is None)
 
 
 def _rotate_plane(plane: np.ndarray, angle_deg: float, fill: float) -> np.ndarray:
@@ -83,6 +86,79 @@ def rotate_array(data: np.ndarray, quarter_turns: int, angle_deg: float,
     return res.astype(dtype)
 
 
+# --------------------------------------------------------------------------- perspective
+def _homography(src, dst) -> np.ndarray:
+    """3 x 3 matrix mapping the four points src onto dst (projective transform)."""
+    A, b = [], []
+    for (x, y), (u, v) in zip(src, dst):
+        A.append([x, y, 1, 0, 0, 0, -u * x, -u * y])
+        A.append([0, 0, 0, x, y, 1, -v * x, -v * y])
+        b += [u, v]
+    h = np.linalg.solve(np.array(A, float), np.array(b, float))
+    return np.append(h, 1.0).reshape(3, 3)
+
+
+def square_size(quad) -> tuple[int, int]:
+    """Width and height of the rectangle a quad is mapped onto: its longest top/bottom and left/right sides."""
+    q = np.asarray(quad, float)
+    w = max(np.hypot(*(q[1] - q[0])), np.hypot(*(q[2] - q[3])))
+    h = max(np.hypot(*(q[3] - q[0])), np.hypot(*(q[2] - q[1])))
+    return max(1, int(round(w))), max(1, int(round(h)))
+
+
+def _square_matrix(quad) -> np.ndarray:
+    w, h = square_size(quad)
+    return _homography(quad, [(0, 0), (w - 1, 0), (w - 1, h - 1), (0, h - 1)])
+
+
+def map_points(points, quad) -> np.ndarray:
+    """Points (x, y) of the rotated image in the squared-up image."""
+    M = _square_matrix(quad)
+    p = np.c_[np.asarray(points, float).reshape(-1, 2), np.ones(len(points))] @ M.T
+    return p[:, :2] / p[:, 2:3]
+
+
+def map_rect(rect, quad, width: int, height: int):
+    """A rectangle (x, y, w, h) of the rotated image as the bounding rectangle of its squared-up corners,
+    limited to the squared-up image; None if nothing of it is left."""
+    x, y, w, h = rect
+    p = map_points([(x, y), (x + w, y), (x + w, y + h), (x, y + h)], quad)
+    x0, y0 = max(0, int(np.floor(p[:, 0].min()))), max(0, int(np.floor(p[:, 1].min())))
+    x1, y1 = min(width, int(np.ceil(p[:, 0].max()))), min(height, int(np.ceil(p[:, 1].max())))
+    return (x0, y0, x1 - x0, y1 - y0) if x1 > x0 and y1 > y0 else None
+
+
+def keystone(quad) -> float:
+    """How far a quad is from a rectangle: the largest relative difference of opposite sides (0.03 = 3 %)."""
+    q = np.asarray(quad, float)
+    top, bottom = np.hypot(*(q[1] - q[0])), np.hypot(*(q[2] - q[3]))
+    left, right = np.hypot(*(q[3] - q[0])), np.hypot(*(q[2] - q[1]))
+    return float(max(abs(top - bottom) / max(top, bottom), abs(left - right) / max(left, right)))
+
+
+def square_up(data: np.ndarray, quad) -> np.ndarray:
+    """Map the quad (TL, TR, BR, BL in pixels of `data`) onto a rectangle (bilinear). (H, W) or (H, W, C)."""
+    from PIL import Image
+    w, h = square_size(quad)
+    inv = np.linalg.inv(_square_matrix(quad))          # PIL wants output -> input
+    inv = inv / inv[2, 2]
+    coeffs = tuple(float(v) for v in inv.flatten()[:8])
+    if data.dtype == np.uint8 and data.ndim == 3 and data.shape[2] == 3:     # display pixels: fast path
+        im = Image.fromarray(np.ascontiguousarray(data), mode="RGB")
+        return np.asarray(im.transform((w, h), Image.PERSPECTIVE, coeffs, Image.BILINEAR))
+    dtype = data.dtype
+
+    def plane(p):
+        im = Image.fromarray(np.ascontiguousarray(p, dtype=np.float32), mode="F")
+        return np.asarray(im.transform((w, h), Image.PERSPECTIVE, coeffs, Image.BILINEAR,
+                                       fillcolor=float(np.nanmedian(p[::4, ::4]))), dtype=np.float32)
+    res = plane(data) if data.ndim == 2 else np.stack([plane(data[..., c]) for c in range(data.shape[2])], axis=2)
+    if np.issubdtype(dtype, np.integer):
+        info = np.iinfo(dtype)
+        res = np.clip(np.rint(res), info.min, info.max)
+    return res.astype(dtype)
+
+
 def clamp_crop(crop, width: int, height: int) -> tuple[int, int, int, int] | None:
     if crop is None:
         return None
@@ -98,6 +174,8 @@ def clamp_crop(crop, width: int, height: int) -> tuple[int, int, int, int] | Non
 
 def apply_array(data: np.ndarray, edit: Edit, fill=None) -> np.ndarray:
     out = rotate_array(data, edit.quarter_turns, edit.angle_deg, fill)
+    if edit.quad is not None:
+        out = square_up(out, edit.quad)
     if edit.crop is not None:
         x, y, w, h = edit.crop
         out = np.ascontiguousarray(out[y:y + h, x:x + w])
@@ -111,6 +189,8 @@ def describe(edit: Edit) -> str:
         rot -= 360
     if abs(rot) > 1e-6:
         parts.append(f"rotated {abs(rot):g}° {'clockwise' if rot > 0 else 'anticlockwise'}")
+    if edit.quad is not None:
+        parts.append(f"perspective corrected ({keystone(edit.quad) * 100:.1f} %)")
     if edit.crop is not None:
         parts.append(f"cropped to {edit.crop[2]} × {edit.crop[3]} px")
     if edit.hide:
@@ -142,6 +222,8 @@ def hide_areas(data: np.ndarray, areas) -> np.ndarray:
 def edited_image(image: ImageData, edit: Edit) -> ImageData:
     """A new ImageData with the edit applied. Scale hints stay; a stored solution is dropped."""
     rotated = rotate_array(image.data, edit.quarter_turns, edit.angle_deg)
+    if edit.quad is not None:
+        rotated = square_up(rotated, edit.quad)
     edit = dataclasses.replace(edit, crop=clamp_crop(edit.crop, rotated.shape[1], rotated.shape[0]))
     data = rotated
     hide = list(edit.hide or [])

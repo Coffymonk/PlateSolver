@@ -8,8 +8,12 @@ Used by Crop and rotate (*Find the star area*, *Find app text and buttons*) and 
 * **Tilt.** A screen has long straight edges; the angle at which the image's horizontal and vertical edges
   line up best with the rows and columns is the tilt. Photos of the sky have no such edges: angle 0.
 * **Star area.** Where the star-like points are dense, trimmed to the screen's own edges when they are clear.
-* **App text and buttons.** Text lines (several letter-sized marks side by side on one baseline), icons and
-  other marks too large or too line-like to be stars. They are hidden by filling them with the sky colour.
+* **Perspective.** A screen photographed a little from the side is a quadrilateral, not a rectangle. A line
+  is fitted to each of the four screen edges (sharp brightness steps sampled along the edge); their
+  crossings are the corners, which Crop and rotate maps back onto a rectangle.
+* **App text and buttons.** Text lines (several letter-sized marks side by side on one baseline), panels of
+  text, toolbars along the edges and hollow shapes (round buttons). A clump of stars in the middle of a rich
+  field, a soft glow and a satellite trail are left alone. They are hidden by filling them with the sky colour.
 """
 from __future__ import annotations
 
@@ -27,6 +31,10 @@ class ScreenGuess:
     looks_like_screen: bool = False            # confident enough to suggest the screen profile
     sharp_sides: int = 0                       # sides of the star area with a clear screen edge
     notes: list[str] = field(default_factory=list)
+    quad: tuple | None = None                  # screen corners (TL, TR, BR, BL) in the image rotated by `angle`
+    keystone: float = 0.0                      # how far the screen is from a rectangle (0.03 = 3 %)
+    edges: dict = field(default_factory=dict)  # side -> position of the clear screen edges (rotated image)
+    span: tuple = ()                           # x0, x1, y0, y1 of the star-like points (rotated image)
 
 
 # --------------------------------------------------------------------------- helpers
@@ -191,8 +199,105 @@ def _edge_near(profile: np.ndarray, start: int, direction: int, reach: int, min_
     return best_i if best >= min_step else None
 
 
-def find_star_area(lum: np.ndarray, angle: float | None = None) -> ScreenGuess:
-    """Where the stars are: the area to crop to, in the image straightened by the returned angle."""
+def find_star_area(lum: np.ndarray, angle: float | None = None, perspective: bool = False) -> ScreenGuess:
+    """Where the stars are: the area to crop to, in the image straightened by the returned angle.
+
+    With `perspective`, the screen's corners are found too when all four edges are clear; then
+    `guess.quad` is set and `guess.crop` is in the squared-up image (see imageedit.square_up)."""
+    guess = _star_area(lum, angle)
+    if perspective and guess.crop is not None and guess.sharp_sides >= 3:
+        from platesolver.core.imageedit import keystone, rotate_array, square_up
+        rot = rotate_array(np.asarray(lum, np.float32), 0, guess.angle) if guess.angle else np.asarray(lum, np.float32)
+        quad = find_screen_quad(rot, guess)
+        if quad is not None:
+            squared = _star_area(square_up(rot, quad), 0.0)
+            if squared.crop is not None:
+                guess.quad, guess.crop, guess.keystone = quad, squared.crop, keystone(quad)
+    return guess
+
+
+def _fit_line(t: np.ndarray, p: np.ndarray, tol: float):
+    """Robust straight line p = m*t + c through samples (pairs tried, most inliers wins, then least squares);
+    (m, c, inlier fraction) or None."""
+    n = len(t)
+    if n < 4:
+        return None
+    best = None
+    for i in range(n):
+        for j in range(i + 1, n):
+            if t[j] == t[i]:
+                continue
+            m = (p[j] - p[i]) / (t[j] - t[i])
+            c = p[i] - m * t[i]
+            inl = np.abs(p - (m * t + c)) < tol
+            if best is None or inl.sum() > best.sum():
+                best = inl
+    if best is None or best.sum() < 3:
+        return None
+    m, c = np.polyfit(t[best], p[best], 1)
+    return float(m), float(c), float(best.mean())
+
+
+def find_screen_quad(rot: np.ndarray, guess: ScreenGuess, samples: int = 24):
+    """Corners (TL, TR, BR, BL) of the screen in the straightened image `rot`.
+
+    In strips across each side of the star area, the outermost strong brightness step near the screen's
+    edge is taken (the edge of the screen, or of the tablet around it – both are parallel to the picture),
+    and a straight line is fitted robustly to each side. None unless all four sides give a clear line."""
+    if not guess.span or len(guess.edges) < 3:
+        return None
+    a, f = _reduce(rot)
+    H, W = a.shape
+    bg = _background(a, 3)                                   # stars removed, edges kept fairly sharp
+    x0, x1, y0, y1 = (v / f for v in guess.span)
+    reach = max(6, int(0.05 * max(H, W)))
+    d = max(2, int(0.01 * max(H, W)))                       # photographed edges are soft: compare a bit apart
+    lines = {}
+    for side in ("left", "right", "top", "bottom"):
+        vertical = side in ("left", "right")
+        outward = -1 if side in ("left", "top") else 1
+        if side in guess.edges:
+            centre = guess.edges[side] / f
+        else:
+            centre = {"left": x0, "right": x1, "top": y0, "bottom": y1}[side]
+        lo, hi = (y0, y1) if vertical else (x0, x1)
+        ts, ps = [], []
+        for k in range(samples):
+            t = lo + (hi - lo) * (0.06 + 0.88 * k / (samples - 1))
+            ti = int(t)
+            w0, w1 = max(0, ti - 2), ti + 3
+            prof = bg[w0:w1, :].mean(axis=0) if vertical else bg[:, w0:w1].mean(axis=1)
+            i0, i1 = max(0, int(centre) - reach), min(len(prof) - d, int(centre) + reach)
+            if i1 - i0 < 3:
+                continue
+            idx = np.arange(i0, i1)
+            step = np.abs(prof[idx + d] - prof[idx])
+            top = float(step.max())
+            if top < 0.06:
+                continue
+            strong = idx[step >= 0.5 * top]
+            e = (strong.max() if outward > 0 else strong.min()) + d / 2      # the outermost strong step
+            ts.append(t)
+            ps.append(float(e))
+        fit = _fit_line(np.array(ts), np.array(ps), tol=max(1.5, 0.004 * max(H, W)))
+        if fit is None or fit[2] < 0.5 or len(ts) < samples // 2 or abs(fit[0]) > 0.12:
+            return None
+        lines[side] = (fit[0], fit[1] * f)          # vertical: x = m*y + c; horizontal: y = m*x + c (full pixels)
+
+    def cross(v, hz):
+        (mv, cv), (mh, ch) = lines[v], lines[hz]
+        y = (mh * cv + ch) / (1 - mh * mv)
+        return (mv * y + cv, y)
+    quad = (cross("left", "top"), cross("right", "top"), cross("right", "bottom"), cross("left", "bottom"))
+    q = np.asarray(quad)
+    w, h = rot.shape[1], rot.shape[0]
+    if (q[:, 0] < -0.05 * w).any() or (q[:, 0] > 1.05 * w).any() or (q[:, 1] < -0.05 * h).any() \
+            or (q[:, 1] > 1.05 * h).any():
+        return None
+    return tuple((float(x), float(y)) for x, y in quad)
+
+
+def _star_area(lum: np.ndarray, angle: float | None = None) -> ScreenGuess:
     from platesolver.core.imageedit import rotate_array
     guess = ScreenGuess()
     guess.angle = estimate_tilt(lum) if angle is None else float(angle)
@@ -228,6 +333,8 @@ def find_star_area(lum: np.ndarray, angle: float | None = None) -> ScreenGuess:
              "top": _edge_near(row, int(by0), -1, reach, 0.06),
              "bottom": _edge_near(row, int(by1), 1, reach, 0.06)}
     guess.sharp_sides = sum(v is not None for v in sides.values())
+    guess.edges = {k: v * f for k, v in sides.items() if v is not None}
+    guess.span = (bx0 * f, bx1 * f, by0 * f, by1 * f)
     L = sides["left"] + 2 if sides["left"] is not None else bx0
     R = sides["right"] - 2 if sides["right"] is not None else bx1
     T = sides["top"] + 2 if sides["top"] is not None else by0
@@ -290,15 +397,32 @@ def find_app_marks(lum: np.ndarray) -> list[tuple[int, int, int, int]]:
     if not comps:
         return []
     star_max = max(6, int(min(H, W) * 0.012))         # a star in a reduced screen photo is smaller than this
+
+    def slanted_line(k, y0, x0, y1, x1):
+        """A thin straight piece at a slant – part of a satellite or aircraft trail, not app graphics
+        (which run along the rows and columns)."""
+        ys, xs = np.nonzero(lab[y0:y1, x0:x1] == k + 1)
+        if len(ys) < 6:
+            return False
+        cov = np.cov(np.vstack([xs, ys]).astype(float))
+        ev, vec = np.linalg.eigh(cov)
+        if ev[1] < 9 * max(ev[0], 1e-6):          # not elongated
+            return False
+        ang = abs(np.degrees(np.arctan2(vec[1, 1], vec[0, 1]))) % 180
+        return min(ang % 90, 90 - ang % 90) > 12
     letters, marks = [], []
-    for (y0, x0, y1, x1, area) in comps:
+    for k, (y0, x0, y1, x1, area) in enumerate(comps):
         hh, ww = y1 - y0, x1 - x0
         fill = area / max(hh * ww, 1)
         if hh > star_max * 1.6 or ww > star_max * 1.6:
             if max(hh, ww) > min(H, W) * 0.25 and fill < 0.08:
                 continue                              # a long thin line, e.g. a satellite trail: leave it
+            if slanted_line(k, y0, x0, y1, x1):
+                continue
             marks.append((x0, y0, ww, hh))            # an icon, button or graph
         elif 3 <= hh <= star_max * 1.6 and (fill < 0.55 or ww > hh * 1.6 or hh > ww * 1.6):
+            if slanted_line(k, y0, x0, y1, x1):
+                continue
             letters.append((x0, y0, ww, hh))          # letter-like: thin strokes or elongated
     # text lines: letter-like marks of similar height close together on one line
     lines = []
@@ -329,9 +453,9 @@ def find_app_marks(lum: np.ndarray) -> list[tuple[int, int, int, int]]:
             gx1 = max(letters[k][0] + letters[k][2] for k in group)
             gy1 = max(letters[k][1] + letters[k][3] for k in group)
             lines.append((gx0, gy0, gx1 - gx0, gy1 - gy0))
-    # a lone large blob in the middle of the image is a bright star (or a close pair), not an app mark: keep
-    # marks that have company (a label, a neighbour) or line up with others along an edge (a toolbar),
-    # and hollow shapes (rings, buttons)
+    # a large blob in the middle of the image is a bright star, a clump of stars or a glow, not an app mark.
+    # Keep marks next to text (an icon with its label), marks along the edges that line up with others or
+    # have neighbours (toolbars, panels), and hollow shapes (rings, buttons)
     near = star_max * 3
     edge_x, edge_y = W * 0.12, H * 0.12
 
@@ -345,18 +469,33 @@ def find_app_marks(lum: np.ndarray) -> list[tuple[int, int, int, int]]:
     kept = []
     for i, m in enumerate(marks):
         cx, cy = centre(m)
-        company = any(gap(m, o) < near for j, o in enumerate(marks) if j != i) or \
-            any(gap(m, t) < near for t in lines)
+        labelled = any(gap(m, t) < near for t in lines)
         at_edge = cx < edge_x or cx > W - edge_x or cy < edge_y or cy > H - edge_y
-        column = at_edge and sum(1 for o in marks if abs(centre(o)[0] - cx) < star_max * 1.5) >= 3
-        row = at_edge and sum(1 for o in marks if abs(centre(o)[1] - cy) < star_max * 1.5) >= 3
+        company = labelled or (at_edge and any(gap(m, o) < near for j, o in enumerate(marks) if j != i))
+        reach = star_max * 12                      # toolbar neighbours are close to each other
+        column = at_edge and sum(1 for o in marks if abs(centre(o)[0] - cx) < star_max * 1.5
+                                 and abs(centre(o)[1] - cy) < reach) >= 3
+        row = at_edge and sum(1 for o in marks if abs(centre(o)[1] - cy) < star_max * 1.5
+                              and abs(centre(o)[0] - cx) < reach) >= 3
         y0, x0 = m[1], m[0]
         area = int(on[y0:y0 + m[3], x0:x0 + m[2]].sum())
-        hollow = max(m[2], m[3]) > star_max * 3 and area / max(m[2] * m[3], 1) < 0.35
+        hollow = min(m[2], m[3]) > star_max * 2 and max(m[2], m[3]) > star_max * 3 \
+            and area / max(m[2] * m[3], 1) < 0.35
         if company or column or row or hollow:
             kept.append(m)
+    # words next to a kept mark belong to the same panel ("66", "Stacked" under "Light 01:34:29")
+    rest = [m for m in marks if m not in kept and m[3] <= star_max * 2.5]
+    grown = True
+    while grown and rest:
+        grown = False
+        for m in list(rest):
+            if any(gap(m, k) < star_max * 2 for k in kept + lines):
+                kept.append(m)
+                rest.remove(m)
+                grown = True
     rects = lines + kept
-    # merge marks that touch (a panel of text lines and a graph becomes one box)
+    # merge marks that are close – nearer than a line of text is high – so a panel of text lines (with the
+    # short numbers between them) or a toolbar of icons and labels becomes one box
     pad = max(2, int(star_max * 0.6))
     merged = [list(r) for r in rects]
     changed = True
@@ -368,7 +507,10 @@ def find_app_marks(lum: np.ndarray) -> list[tuple[int, int, int, int]]:
             k = 0
             while k < len(merged):
                 x2, y2, w2, h2 = merged[k]
-                if x - pad < x2 + w2 and x2 - pad < x + w and y - pad < y2 + h2 and y2 - pad < y + h:
+                g = max(pad, int(0.9 * min(max(h, h2), star_max * 2.5)))
+                if min(y + h, y2 + h2) - max(y, y2) > 0.5 * min(h, h2):     # on the same line of text
+                    g = max(g, int(2 * min(max(h, h2), star_max * 2.5)))
+                if x - g < x2 + w2 and x2 - g < x + w and y - g < y2 + h2 and y2 - g < y + h:
                     nx, ny = min(x, x2), min(y, y2)
                     w, h = max(x + w, x2 + w2) - nx, max(y + h, y2 + h2) - ny
                     x, y = nx, ny
