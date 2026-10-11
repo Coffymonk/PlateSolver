@@ -54,6 +54,7 @@ The `Samples` folder and the build outputs are not uploaded (see `.gitignore`).
 | `platesolver.spec` | PyInstaller recipe shared by all systems: which files and modules are bundled |
 | `launcher.py` | Entry point of the packaged app |
 | `make_icons.py` | Draws the app icon (`icons/`: .png, .ico, .icns) |
+| `guides/make_guides.py` | Makes the installation guides (Windows and macOS, English and Swedish, PDF) in `dist/windows` and `dist/macos`. They contain no version number, so they only need to be made again when the installation changes. Needs `pip install reportlab` and the DejaVu fonts |
 | `../tools/update_openngc.py` | Refreshes the bundled OpenNGC catalogue from its newest release (also runnable on its own) |
 | `windows/` | `build.bat`, `installer.iss` (Inno Setup) |
 | `macos/` | `build.sh` |

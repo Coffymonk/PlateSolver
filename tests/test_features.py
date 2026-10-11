@@ -226,6 +226,23 @@ def test_astrometry_net_flow(monkeypatch, tmp_path):
         assert got == pytest.approx(want, abs=1e-7), (px, got, want)
 
 
+def test_upload_question_is_asked_once_per_image():
+    """Later tries on the same image (cleaned or cropped copies, phone aids, a hint, F5) reuse the answer."""
+    from platesolver.core.models import ImageData
+    store = SettingsStore(None)
+    p = Pipeline(PluginRegistry(store).discover(), store.section(GeneralSettings()))
+    asked = []
+    ctx = TaskContext(confirm=lambda title, text, remember_key="", **kw: asked.append(title) or False)
+    img = ImageData(Path("m42.jpg"), "JPEG", np.zeros((50, 60), np.float32))
+    for _ in range(3):                         # three tries during one solve, then F5
+        c = p._ask_once(img, ctx)
+        assert c.confirm("Upload to astrometry.net?", "", "astrometry_upload") is False
+    assert asked == ["Upload to astrometry.net?"]
+    other = ImageData(Path("m31.jpg"), "JPEG", np.zeros((50, 60), np.float32))
+    p._ask_once(other, ctx).confirm("Upload to astrometry.net?", "", "astrometry_upload")
+    assert len(asked) == 2                     # a new image is asked about again
+
+
 # --------------------------------------------------------------------------- overlays
 class Rec:
     ly_decimals = 1

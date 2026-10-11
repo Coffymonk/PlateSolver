@@ -6,9 +6,9 @@ The questions live in one binary file, ``quiz.dat``. It is compressed and scramb
 can't simply be read in a text editor (this is not encryption, just keeping the answers out of sight).
 It also carries one picture per topic. A newer quiz file can replace the old one at any time:
 
-  * replace ``platesolver/data/quiz.dat`` in the program folder, or
-  * put a ``quiz.dat`` in the PlateSolver settings folder, or
-  * point Settings › Astronomy quiz › Quiz file at it.
+  * replace ``platesolver/data/quiz.dat`` in the program folder (in the built apps:
+    ``_internal/platesolver/data`` on Windows and Linux, ``Contents/Resources/platesolver/data`` on macOS), or
+  * copy it into the user's "My quizzes" folder, where it appears in Settings › Astronomy quiz.
 
 ``tools/build_quiz.py`` turns editable JSON files into a quiz file, and can unpack one again.
 
