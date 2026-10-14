@@ -38,6 +38,7 @@ class Edit:
     crop: tuple[int, int, int, int] | None = None   # x, y, width, height in the rotated image
     hide: list = field(default_factory=list)          # areas (x, y, w, h) in the rotated image to fill with sky
     quad: tuple | None = None          # screen corners (TL, TR, BR, BL) as (x, y) in the rotated image
+    aspect: float | None = None        # true width / height of the screen (None: from its longest sides)
 
     @property
     def rotation_deg(self) -> float:
@@ -98,31 +99,66 @@ def _homography(src, dst) -> np.ndarray:
     return np.append(h, 1.0).reshape(3, 3)
 
 
-def square_size(quad) -> tuple[int, int]:
-    """Width and height of the rectangle a quad is mapped onto: its longest top/bottom and left/right sides."""
+def square_size(quad, aspect: float | None = None) -> tuple[int, int]:
+    """Width and height of the rectangle a quad is mapped onto: its longest top/bottom side, and its longest
+    left/right side or, when the true proportions (width / height) are known, the width divided by them."""
     q = np.asarray(quad, float)
     w = max(np.hypot(*(q[1] - q[0])), np.hypot(*(q[2] - q[3])))
-    h = max(np.hypot(*(q[3] - q[0])), np.hypot(*(q[2] - q[1])))
+    h = w / aspect if aspect else max(np.hypot(*(q[3] - q[0])), np.hypot(*(q[2] - q[1])))
     return max(1, int(round(w))), max(1, int(round(h)))
 
 
-def _square_matrix(quad) -> np.ndarray:
-    w, h = square_size(quad)
+def _square_matrix(quad, aspect: float | None = None) -> np.ndarray:
+    w, h = square_size(quad, aspect)
     return _homography(quad, [(0, 0), (w - 1, 0), (w - 1, h - 1), (0, h - 1)])
 
 
-def map_points(points, quad) -> np.ndarray:
+def screen_aspect(quad, width: int, height: int, focal35: float | None = None) -> float | None:
+    """The true width / height of a rectangle photographed as `quad` (TL, TR, BR, BL) in a picture of
+    width x height pixels (Zhang & He 2007, "Whiteboard scanning and image enhancement").
+
+    The camera's focal length decides how much a side is foreshortened; it comes from the 35 mm-equivalent
+    focal length in the photo's EXIF, or, without it, from the quad itself when its perspective is strong
+    enough. None when neither works (then the longest sides are used)."""
+    c = np.array([width / 2.0, height / 2.0])
+    tl, tr, br, bl = (np.r_[np.asarray(p, float) - c, 1.0] for p in quad)
+    m1, m2, m3, m4 = tl, tr, bl, br
+    try:
+        k2 = np.dot(np.cross(m1, m4), m3) / np.dot(np.cross(m2, m4), m3)
+        k3 = np.dot(np.cross(m1, m4), m2) / np.dot(np.cross(m3, m4), m2)
+    except (ZeroDivisionError, FloatingPointError):
+        return None
+    n2, n3 = k2 * m2 - m1, k3 * m3 - m1
+    diag = float(np.hypot(width, height))
+    f = None
+    if focal35:
+        f = focal35 * diag / 43.2666                      # pixels, from the full-frame diagonal
+    elif abs(n2[2] * n3[2]) > 1e-9:
+        f2 = -(n2[0] * n3[0] + n2[1] * n3[1]) / (n2[2] * n3[2])
+        if f2 > 0 and 0.4 * diag < np.sqrt(f2) < 4 * diag:
+            f = float(np.sqrt(f2))
+    if f is None:
+        return None
+    num = (n2[0] ** 2 + n2[1] ** 2) / f ** 2 + n2[2] ** 2
+    den = (n3[0] ** 2 + n3[1] ** 2) / f ** 2 + n3[2] ** 2
+    if not (num > 0 and den > 0):
+        return None
+    r = float(np.sqrt(num / den))
+    return r if 0.2 < r < 5 else None
+
+
+def map_points(points, quad, aspect: float | None = None) -> np.ndarray:
     """Points (x, y) of the rotated image in the squared-up image."""
-    M = _square_matrix(quad)
+    M = _square_matrix(quad, aspect)
     p = np.c_[np.asarray(points, float).reshape(-1, 2), np.ones(len(points))] @ M.T
     return p[:, :2] / p[:, 2:3]
 
 
-def map_rect(rect, quad, width: int, height: int):
+def map_rect(rect, quad, width: int, height: int, aspect: float | None = None):
     """A rectangle (x, y, w, h) of the rotated image as the bounding rectangle of its squared-up corners,
     limited to the squared-up image; None if nothing of it is left."""
     x, y, w, h = rect
-    p = map_points([(x, y), (x + w, y), (x + w, y + h), (x, y + h)], quad)
+    p = map_points([(x, y), (x + w, y), (x + w, y + h), (x, y + h)], quad, aspect)
     x0, y0 = max(0, int(np.floor(p[:, 0].min()))), max(0, int(np.floor(p[:, 1].min())))
     x1, y1 = min(width, int(np.ceil(p[:, 0].max()))), min(height, int(np.ceil(p[:, 1].max())))
     return (x0, y0, x1 - x0, y1 - y0) if x1 > x0 and y1 > y0 else None
@@ -136,11 +172,12 @@ def keystone(quad) -> float:
     return float(max(abs(top - bottom) / max(top, bottom), abs(left - right) / max(left, right)))
 
 
-def square_up(data: np.ndarray, quad) -> np.ndarray:
-    """Map the quad (TL, TR, BR, BL in pixels of `data`) onto a rectangle (bilinear). (H, W) or (H, W, C)."""
+def square_up(data: np.ndarray, quad, aspect: float | None = None) -> np.ndarray:
+    """Map the quad (TL, TR, BR, BL in pixels of `data`) onto a rectangle (bilinear). (H, W) or (H, W, C).
+    Stars squashed by the viewing angle get their round shape and true spacing back."""
     from PIL import Image
-    w, h = square_size(quad)
-    inv = np.linalg.inv(_square_matrix(quad))          # PIL wants output -> input
+    w, h = square_size(quad, aspect)
+    inv = np.linalg.inv(_square_matrix(quad, aspect))          # PIL wants output -> input
     inv = inv / inv[2, 2]
     coeffs = tuple(float(v) for v in inv.flatten()[:8])
     if data.dtype == np.uint8 and data.ndim == 3 and data.shape[2] == 3:     # display pixels: fast path
@@ -175,7 +212,7 @@ def clamp_crop(crop, width: int, height: int) -> tuple[int, int, int, int] | Non
 def apply_array(data: np.ndarray, edit: Edit, fill=None) -> np.ndarray:
     out = rotate_array(data, edit.quarter_turns, edit.angle_deg, fill)
     if edit.quad is not None:
-        out = square_up(out, edit.quad)
+        out = square_up(out, edit.quad, edit.aspect)
     if edit.crop is not None:
         x, y, w, h = edit.crop
         out = np.ascontiguousarray(out[y:y + h, x:x + w])
@@ -223,7 +260,7 @@ def edited_image(image: ImageData, edit: Edit) -> ImageData:
     """A new ImageData with the edit applied. Scale hints stay; a stored solution is dropped."""
     rotated = rotate_array(image.data, edit.quarter_turns, edit.angle_deg)
     if edit.quad is not None:
-        rotated = square_up(rotated, edit.quad)
+        rotated = square_up(rotated, edit.quad, edit.aspect)
     edit = dataclasses.replace(edit, crop=clamp_crop(edit.crop, rotated.shape[1], rotated.shape[0]))
     data = rotated
     hide = list(edit.hide or [])

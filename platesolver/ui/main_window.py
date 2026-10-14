@@ -101,6 +101,7 @@ class MainWindow(QMainWindow):
         self.original_image: ImageData | None = None   # as opened; self.image differs after Crop and rotate
         self._crop_q, self._crop_angle, self._crop_base_rgb = 0, 0.0, None
         self._crop_quad, self._crop_quad_manual = None, False   # screen corners (perspective), set by hand?
+        self._crop_aspect = None                # the screen's true width / height, when known
         self._last_edit = None                  # the Crop and rotate edit behind the image shown
         self.result: SolveResult | None = None
         self.objects: list[SkyObject] = []
@@ -452,6 +453,16 @@ class MainWindow(QMainWindow):
         prof = self.pipeline.profiles.active()
         return prof is not None and prof.kind == "screen"
 
+    def _use_quad(self, guess) -> bool:
+        """Square up the screen found? Always, when it is clearly skewed (default), or never."""
+        if guess is None or guess.quad is None or not self._screen_profile_active():
+            return False
+        mode = self._screen_setting("perspective")
+        return mode == "always" or (mode == "if_fails" and guess.keystone >= 0.05)
+
+    def _focal35(self):
+        return (self.original_image or self.image).header.get("FOCAL35") if (self.original_image or self.image) else None
+
     def _screen_guess(self, image):
         """For a photo that may show a screen: where the stars are (or None). Runs in the opening task."""
         if self._screen_setting("screen_on_open") == "off":
@@ -460,8 +471,8 @@ class MainWindow(QMainWindow):
             return None
         try:
             from platesolver.core.screendetect import find_star_area
-            perspective = self._screen_profile_active() and self._screen_setting("perspective") == "always"
-            guess = find_star_area(image.luminance(), perspective=perspective)
+            # corners are always looked for: a screen photographed from the side is recognised by them
+            guess = find_star_area(image.luminance(), perspective=True, focal35=image.header.get("FOCAL35"))
         except Exception:
             log.exception("Screen detection failed")
             return None
@@ -775,23 +786,23 @@ class MainWindow(QMainWindow):
         """Solving a photo of a screen failed: square up the screen (if its edges are found) and solve again."""
         import copy as _copy
         from platesolver.core.imageedit import (Edit, describe, edited_image, map_rect, rotate_array,
-                                                square_size)
-        from platesolver.core.screendetect import find_screen_quad, find_star_area
+                                                screen_aspect, square_size)
+        from platesolver.core.screendetect import find_screen_quad
         self._perspective_tried_for = self.original_image
         base, shown = self.original_image, self.image
         edit = self._last_edit or Edit()
 
         def work(ctx):
             lum = rotate_array(base.luminance(), edit.quarter_turns, edit.angle_deg)
-            guess = find_star_area(lum, angle=0.0)
-            quad = find_screen_quad(lum, guess) if guess.crop is not None else None
+            quad = find_screen_quad(lum)
             if quad is None:
                 ctx.log("Perspective: the screen's edges were not found clearly enough to square it up")
                 return None
-            w, h = square_size(quad)
-            crop = map_rect(edit.crop, quad, w, h) if edit.crop else None
-            hide = [r for r in (map_rect(r, quad, w, h) for r in (edit.hide or [])) if r]
-            new_edit = Edit(edit.quarter_turns, edit.angle_deg, crop, hide=hide, quad=quad)
+            aspect = screen_aspect(quad, lum.shape[1], lum.shape[0], base.header.get("FOCAL35"))
+            w, h = square_size(quad, aspect)
+            crop = map_rect(edit.crop, quad, w, h, aspect) if edit.crop else None
+            hide = [r for r in (map_rect(r, quad, w, h, aspect) for r in (edit.hide or [])) if r]
+            new_edit = Edit(edit.quarter_turns, edit.angle_deg, crop, hide=hide, quad=quad, aspect=aspect)
             new = edited_image(base, new_edit)
             new.hints = _copy.deepcopy(shown.hints)          # object hints and profile changes made meanwhile
             ctx.log(f"Solving failed – trying again with the perspective corrected ({describe(new_edit)})")
@@ -1027,7 +1038,7 @@ class MainWindow(QMainWindow):
             self._update_actions()
             return
         self._crop_q, self._crop_angle = 0, 0.0
-        self._crop_quad, self._crop_quad_manual = None, False
+        self._crop_quad, self._crop_quad_manual, self._crop_aspect = None, False, None
         self._crop_base_rgb = self._rgb
         self.hover_card.hide()
         self._hovered = None
@@ -1048,7 +1059,7 @@ class MainWindow(QMainWindow):
         try:
             rgb = rotate_array(self._crop_base_rgb, self._crop_q, self._crop_angle)
             if squared and self._crop_quad is not None:
-                rgb = square_up(rgb, self._crop_quad)
+                rgb = square_up(rgb, self._crop_quad, self._crop_aspect)
         finally:
             QApplication.restoreOverrideCursor()
         self._crop_preview_rgb = rgb
@@ -1060,7 +1071,7 @@ class MainWindow(QMainWindow):
         if not self.view.crop_mode() or self.worker is not None:
             return
         self._crop_q = (self._crop_q + step) % 4
-        self._crop_quad, self._crop_quad_manual = None, False
+        self._crop_quad, self._crop_quad_manual, self._crop_aspect = None, False, None
         self.crop_bar.set_tool("select")
         self.view.set_crop_tool("select")
         self._crop_preview()
@@ -1069,7 +1080,7 @@ class MainWindow(QMainWindow):
         if not self.view.crop_mode() or abs(angle - self._crop_angle) < 1e-9:
             return
         self._crop_angle = angle
-        self._crop_quad, self._crop_quad_manual = None, False
+        self._crop_quad, self._crop_quad_manual, self._crop_aspect = None, False, None
         self.crop_bar.set_tool("select")
         self.view.set_crop_tool("select")
         self._crop_preview()
@@ -1078,7 +1089,7 @@ class MainWindow(QMainWindow):
         self.crop_bar.reset_angle()
         changed = self._crop_q or self._crop_angle or self._crop_quad is not None
         self._crop_q, self._crop_angle = 0, 0.0
-        self._crop_quad, self._crop_quad_manual = None, False
+        self._crop_quad, self._crop_quad_manual, self._crop_aspect = None, False, None
         self.crop_bar.set_tool("select")
         self.view.set_crop_tool("select")
         if changed:
@@ -1123,13 +1134,15 @@ class MainWindow(QMainWindow):
 
     def _leave_corners(self):
         """Back from Screen corners: square the picture up with the corners shown."""
-        from platesolver.core.imageedit import keystone
+        from platesolver.core.imageedit import keystone, screen_aspect
         quad = self.view.quad()
         if quad is None:
             return
         if self._quad_moved:
             self._crop_quad_manual = True
         self._crop_quad = quad
+        r = self.view.sceneRect()
+        self._crop_aspect = screen_aspect(quad, int(round(r.width())), int(round(r.height())), self._focal35())
         self.view.set_quad(None)
         self._crop_preview()
         self.log(f"Perspective corrected with the screen corners ({keystone(quad) * 100:.1f} % from a rectangle) – "
@@ -1141,9 +1154,8 @@ class MainWindow(QMainWindow):
             return
         from platesolver.core.imageedit import rotate_array
         from platesolver.core.screendetect import find_star_area
-        from platesolver.core.imageedit import keystone, square_up
+        from platesolver.core.imageedit import square_up
         from platesolver.core.screendetect import _star_area
-        perspective = self._screen_profile_active() and self._screen_setting("perspective") == "always"
         if self.view.crop_tool() == "corners":
             self._leave_corners()
         QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -1151,30 +1163,38 @@ class MainWindow(QMainWindow):
             if self._crop_quad_manual and self._crop_quad is not None:
                 # corners set by hand: keep them and the angle, look for the stars in the squared-up picture
                 lum = rotate_array(self.image.luminance(), self._crop_q, self._crop_angle)
-                guess = _star_area(square_up(lum, self._crop_quad), 0.0)
-                guess.angle, guess.quad = self._crop_angle, self._crop_quad
-            elif guess is None or self._crop_q or (perspective and guess.quad is None):
-                lum = self.image.luminance()
-                if self._crop_q:
-                    lum = rotate_array(lum, self._crop_q, 0.0)
-                guess = find_star_area(lum, perspective=perspective)
+                angle, quad, aspect = self._crop_angle, self._crop_quad, self._crop_aspect
+                found = _star_area(square_up(lum, quad, aspect), 0.0)
+                crop, keystone_ = found.crop, None
+            else:
+                if guess is None or self._crop_q:
+                    lum = self.image.luminance()
+                    if self._crop_q:
+                        lum = rotate_array(lum, self._crop_q, 0.0)
+                    guess = find_star_area(lum, perspective=True, focal35=self._focal35())
+                if self._use_quad(guess):
+                    angle, quad, aspect, crop = 0.0, guess.quad, guess.aspect, guess.quad_crop
+                    keystone_ = guess.keystone
+                else:
+                    angle, quad, aspect, crop, keystone_ = guess.angle, None, None, guess.crop, None
         finally:
             QApplication.restoreOverrideCursor()
-        if guess.crop is None:
+        if crop is None:
             self.set_status("No area with stars found – drag the selection yourself")
             return
-        self._crop_angle = guess.angle
-        self._crop_quad = guess.quad
-        self.crop_bar.set_angle_value(guess.angle)
+        self._crop_angle, self._crop_quad, self._crop_aspect = angle, quad, aspect
+        self.crop_bar.set_angle_value(angle)
         self._crop_preview()
-        self.view.set_crop_rect(guess.crop)
+        self.view.set_crop_rect(crop)
         self.crop_bar.set_tool("select")
         self.view.set_crop_tool("select")
-        msg = f"Star area selected ({guess.crop[2]} × {guess.crop[3]} px"
-        if guess.angle:
-            msg += f", straightened {abs(guess.angle):g}° {'clockwise' if guess.angle > 0 else 'anticlockwise'}"
-        if guess.quad is not None:
-            msg += f", perspective corrected {keystone(guess.quad) * 100:.1f} %"
+        msg = f"Star area selected ({crop[2]} × {crop[3]} px"
+        if angle:
+            msg += f", straightened {abs(angle):g}° {'clockwise' if angle > 0 else 'anticlockwise'}"
+        if keystone_ is not None:
+            msg += f", perspective corrected: the screen was {keystone_ * 100:.0f} % skewed"
+            if aspect:
+                msg += f", proportions {aspect:.2f} : 1"
         msg += ")"
         self.log(msg)
         self.set_status(msg + " – adjust it if needed")
@@ -1285,7 +1305,8 @@ class MainWindow(QMainWindow):
         except ValueError as exc:
             QMessageBox.information(self, APP_NAME, str(exc))
             return
-        edit = Edit(self._crop_q, self._crop_angle, crop, hide=self.view.hidden_rects(), quad=self._crop_quad)
+        edit = Edit(self._crop_q, self._crop_angle, crop, hide=self.view.hidden_rects(), quad=self._crop_quad,
+                    aspect=self._crop_aspect if self._crop_quad is not None else None)
         if edit.is_identity():
             self.cancel_crop()
             if solve and not (self.result and self.result.success):

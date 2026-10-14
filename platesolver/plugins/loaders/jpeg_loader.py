@@ -76,6 +76,9 @@ def read_exif(im, header: dict) -> dict:
         for tag in (EXIF_FOCAL_LENGTH, EXIF_FOCAL_35MM, EXIF_FOCAL_PLANE_XRES, EXIF_FOCAL_PLANE_UNIT):
             if tag not in exif_ifd and exif.get(tag):      # some TIFF writers put them in the main IFD
                 exif_ifd[tag] = exif.get(tag)
+        f35 = _num(exif_ifd.get(EXIF_FOCAL_35MM))
+        if f35 and "FOCAL35" not in header:
+            header["FOCAL35"] = f35                     # 35 mm-equivalent focal length (photos of a screen)
         for tag, name in ((0x010F, "Make"), (0x0110, "Camera"), (0x0131, "Software"), (0x0132, "DateTime")):
             if exif.get(tag) and name not in header:
                 header[name] = str(exif.get(tag)).strip()

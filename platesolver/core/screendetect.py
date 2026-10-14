@@ -8,9 +8,12 @@ Used by Crop and rotate (*Find the star area*, *Find app text and buttons*) and 
 * **Tilt.** A screen has long straight edges; the angle at which the image's horizontal and vertical edges
   line up best with the rows and columns is the tilt. Photos of the sky have no such edges: angle 0.
 * **Star area.** Where the star-like points are dense, trimmed to the screen's own edges when they are clear.
-* **Perspective.** A screen photographed a little from the side is a quadrilateral, not a rectangle. A line
-  is fitted to each of the four screen edges (sharp brightness steps sampled along the edge); their
-  crossings are the corners, which Crop and rotate maps back onto a rectangle.
+* **Perspective.** A screen photographed from the side is a quadrilateral, not a rectangle, and its stars
+  are squashed – more on the far side. From the middle of the star field, rays go out in all directions to
+  where the stars end; there, the sharpest brightness step is the edge of the screen (or of the picture on
+  it). Straight lines are fitted to these edge points at any angle, and the four that enclose the star
+  field give the corners. Crop and rotate maps them back onto a rectangle with the screen's true
+  proportions (from the camera's focal length), which puts every star back in its place.
 * **App text and buttons.** Text lines (several letter-sized marks side by side on one baseline), panels of
   text, toolbars along the edges and hollow shapes (round buttons). A clump of stars in the middle of a rich
   field, a soft glow and a satellite trail are left alone. They are hidden by filling them with the sky colour.
@@ -31,8 +34,10 @@ class ScreenGuess:
     looks_like_screen: bool = False            # confident enough to suggest the screen profile
     sharp_sides: int = 0                       # sides of the star area with a clear screen edge
     notes: list[str] = field(default_factory=list)
-    quad: tuple | None = None                  # screen corners (TL, TR, BR, BL) in the image rotated by `angle`
+    quad: tuple | None = None                  # screen corners (TL, TR, BR, BL) in the image as given (no rotation)
+    quad_crop: tuple | None = None             # the star area in the squared-up image
     keystone: float = 0.0                      # how far the screen is from a rectangle (0.03 = 3 %)
+    aspect: float | None = None                # the screen's true width / height, when it could be worked out
     edges: dict = field(default_factory=dict)  # side -> position of the clear screen edges (rotated image)
     span: tuple = ()                           # x0, x1, y0, y1 of the star-like points (rotated image)
 
@@ -199,102 +204,219 @@ def _edge_near(profile: np.ndarray, start: int, direction: int, reach: int, min_
     return best_i if best >= min_step else None
 
 
-def find_star_area(lum: np.ndarray, angle: float | None = None, perspective: bool = False) -> ScreenGuess:
-    """Where the stars are: the area to crop to, in the image straightened by the returned angle.
+def find_star_area(lum: np.ndarray, angle: float | None = None, perspective: bool = False,
+                   focal35: float | None = None) -> ScreenGuess:
+    """Where the stars are: the area to crop to (`crop`), in the image straightened by `angle`.
 
-    With `perspective`, the screen's corners are found too when all four edges are clear; then
-    `guess.quad` is set and `guess.crop` is in the squared-up image (see imageedit.square_up)."""
+    With `perspective`, the screen's corners are looked for too, at any viewing angle; when found, `quad`
+    holds them (in `lum` as given), `quad_crop` the star area in the squared-up picture, `aspect` the
+    screen's true proportions (from `focal35`, the 35 mm-equivalent focal length, when known) and
+    `keystone` how skewed it is. A clearly framed screen also counts as a photo of a screen."""
     guess = _star_area(lum, angle)
-    if perspective and guess.crop is not None and guess.sharp_sides >= 3:
-        from platesolver.core.imageedit import keystone, rotate_array, square_up
-        rot = rotate_array(np.asarray(lum, np.float32), 0, guess.angle) if guess.angle else np.asarray(lum, np.float32)
-        quad = find_screen_quad(rot, guess)
-        if quad is not None:
-            squared = _star_area(square_up(rot, quad), 0.0)
+    if perspective and guess.crop is not None:
+        from platesolver.core.imageedit import keystone, screen_aspect, square_up
+        found = _quad_any_angle(np.asarray(lum, np.float32))
+        if found is not None:
+            quad, support = found
+            h, w = lum.shape[:2]
+            aspect = screen_aspect(quad, w, h, focal35)
+            squared = _star_area(square_up(np.asarray(lum, np.float32), quad, aspect), 0.0)
             if squared.crop is not None:
-                guess.quad, guess.crop, guess.keystone = quad, squared.crop, keystone(quad)
+                guess.quad, guess.quad_crop, guess.aspect = quad, squared.crop, aspect
+                guess.keystone = keystone(quad)
+                if support >= 0.45:
+                    guess.looks_like_screen = True
     return guess
 
 
-def _fit_line(t: np.ndarray, p: np.ndarray, tol: float):
-    """Robust straight line p = m*t + c through samples (pairs tried, most inliers wins, then least squares);
-    (m, c, inlier fraction) or None."""
-    n = len(t)
-    if n < 4:
-        return None
-    best = None
-    for i in range(n):
-        for j in range(i + 1, n):
-            if t[j] == t[i]:
-                continue
-            m = (p[j] - p[i]) / (t[j] - t[i])
-            c = p[i] - m * t[i]
-            inl = np.abs(p - (m * t + c)) < tol
-            if best is None or inl.sum() > best.sum():
-                best = inl
-    if best is None or best.sum() < 3:
-        return None
-    m, c = np.polyfit(t[best], p[best], 1)
-    return float(m), float(c), float(best.mean())
+def find_screen_quad(rot: np.ndarray, guess: ScreenGuess | None = None):
+    """Corners (TL, TR, BR, BL) of the screen in `rot`, at any viewing angle; None if not found."""
+    found = _quad_any_angle(np.asarray(rot, np.float32))
+    return None if found is None else found[0]
 
 
-def find_screen_quad(rot: np.ndarray, guess: ScreenGuess, samples: int = 24):
-    """Corners (TL, TR, BR, BL) of the screen in the straightened image `rot`.
-
-    In strips across each side of the star area, the outermost strong brightness step near the screen's
-    edge is taken (the edge of the screen, or of the tablet around it – both are parallel to the picture),
-    and a straight line is fitted robustly to each side. None unless all four sides give a clear line."""
-    if not guess.span or len(guess.edges) < 3:
+def _star_field(a: np.ndarray):
+    """Star-like points, and the middle and members of the largest dense patch of them."""
+    xs, ys = _points(a)
+    if len(xs) < 30:
         return None
-    a, f = _reduce(rot)
     H, W = a.shape
-    bg = _background(a, 3)                                   # stars removed, edges kept fairly sharp
-    x0, x1, y0, y1 = (v / f for v in guess.span)
-    reach = max(6, int(0.05 * max(H, W)))
-    d = max(2, int(0.01 * max(H, W)))                       # photographed edges are soft: compare a bit apart
-    lines = {}
-    for side in ("left", "right", "top", "bottom"):
-        vertical = side in ("left", "right")
-        outward = -1 if side in ("left", "top") else 1
-        if side in guess.edges:
-            centre = guess.edges[side] / f
-        else:
-            centre = {"left": x0, "right": x1, "top": y0, "bottom": y1}[side]
-        lo, hi = (y0, y1) if vertical else (x0, x1)
-        ts, ps = [], []
-        for k in range(samples):
-            t = lo + (hi - lo) * (0.06 + 0.88 * k / (samples - 1))
-            ti = int(t)
-            w0, w1 = max(0, ti - 2), ti + 3
-            prof = bg[w0:w1, :].mean(axis=0) if vertical else bg[:, w0:w1].mean(axis=1)
-            i0, i1 = max(0, int(centre) - reach), min(len(prof) - d, int(centre) + reach)
-            if i1 - i0 < 3:
-                continue
-            idx = np.arange(i0, i1)
-            step = np.abs(prof[idx + d] - prof[idx])
-            top = float(step.max())
-            if top < 0.06:
-                continue
-            strong = idx[step >= 0.5 * top]
-            e = (strong.max() if outward > 0 else strong.min()) + d / 2      # the outermost strong step
-            ts.append(t)
-            ps.append(float(e))
-        fit = _fit_line(np.array(ts), np.array(ps), tol=max(1.5, 0.004 * max(H, W)))
-        if fit is None or fit[2] < 0.5 or len(ts) < samples // 2 or abs(fit[0]) > 0.12:
-            return None
-        lines[side] = (fit[0], fit[1] * f)          # vertical: x = m*y + c; horizontal: y = m*x + c (full pixels)
-
-    def cross(v, hz):
-        (mv, cv), (mh, ch) = lines[v], lines[hz]
-        y = (mh * cv + ch) / (1 - mh * mv)
-        return (mv * y + cv, y)
-    quad = (cross("left", "top"), cross("right", "top"), cross("right", "bottom"), cross("left", "bottom"))
-    q = np.asarray(quad)
-    w, h = rot.shape[1], rot.shape[0]
-    if (q[:, 0] < -0.05 * w).any() or (q[:, 0] > 1.05 * w).any() or (q[:, 1] < -0.05 * h).any() \
-            or (q[:, 1] > 1.05 * h).any():
+    c = max(H, W) / 40.0
+    gh, gw = int(np.ceil(H / c)), int(np.ceil(W / c))
+    gy, gx = np.minimum((ys / c).astype(int), gh - 1), np.minimum((xs / c).astype(int), gw - 1)
+    cnt = np.zeros((gh, gw), np.float32)
+    np.add.at(cnt, (gy, gx), 1)
+    sm = _box(cnt, 1, 1)
+    dense = sm >= 0.3 * float(np.percentile(sm[sm > 0], 90))
+    lab, comps = _components(dense)
+    if not comps:
         return None
-    return tuple((float(x), float(y)) for x, y in quad)
+    big = max(range(len(comps)), key=lambda k: comps[k][4])
+    inside = lab[gy, gx] == big + 1
+    if inside.sum() < 20:
+        return None
+    return float(np.median(xs[inside])), float(np.median(ys[inside])), xs[inside], ys[inside]
+
+
+def _robust_lines(px: np.ndarray, py: np.ndarray, tol: float, max_lines: int = 8, min_in: int = 6):
+    """Straight lines through the most points, one after another (pairs tried, then a least-squares fit
+    to the inliers): [(unit normal, offset, inliers)] with normal · (x, y) = offset."""
+    pts = np.c_[px, py]
+    alive = np.ones(len(pts), bool)
+    lines = []
+    for _ in range(max_lines):
+        idx = np.nonzero(alive)[0]
+        if len(idx) < min_in:
+            break
+        P = pts[idx]
+        i, j = np.triu_indices(len(P), 1)
+        d = P[j] - P[i]
+        L = np.hypot(d[:, 0], d[:, 1])
+        ok = L > tol * 3
+        i, d, L = i[ok], d[ok], L[ok]
+        if len(L) == 0:
+            break
+        n = np.c_[-d[:, 1], d[:, 0]] / L[:, None]
+        c = (n * P[i]).sum(1)
+        best, bk = -1, None
+        for s0 in range(0, len(n), 4000):
+            cnt = (np.abs(P @ n[s0:s0 + 4000].T - c[s0:s0 + 4000]) < tol).sum(0)
+            k = int(np.argmax(cnt))
+            if cnt[k] > best:
+                best, bk = int(cnt[k]), s0 + k
+        if best < min_in:
+            break
+        Q = P[np.abs(P @ n[bk] - c[bk]) < tol]
+        mu = Q.mean(0)
+        direction = np.linalg.svd(Q - mu)[2][0]
+        nn = np.array([-direction[1], direction[0]])
+        cc = float(nn @ mu)
+        lines.append((nn, cc, int((np.abs(P @ nn - cc) < tol).sum())))
+        alive[idx[np.abs(P @ nn - cc) < tol * 1.5]] = False
+    return lines
+
+
+def _cross2(u, v) -> float:
+    return float(u[0] * v[1] - u[1] * v[0])
+
+
+def _quad_any_angle(lum: np.ndarray, rays: int = 240):
+    """The screen's corners (TL, TR, BR, BL, full pixels) and how much of its outline was seen (0–1)."""
+    from itertools import combinations
+    a, f = _reduce(lum)
+    H, W = a.shape
+    S = max(H, W)
+    field_ = _star_field(a)
+    if field_ is None:
+        return None
+    cx, cy, ix, iy = field_
+    bg = _background(a, 3)
+    # star texture on a coarse grid, fainter points included, relative to the star field's own density
+    c = S / 80.0
+    gh, gw = int(np.ceil(H / c)), int(np.ceil(W / c))
+    tx, ty = _points(a, sigma=3.0)
+    cnt = np.zeros((gh, gw), np.float32)
+    np.add.at(cnt, (np.minimum((ty / c).astype(int), gh - 1), np.minimum((tx / c).astype(int), gw - 1)), 1)
+    T = _box(cnt, 1, 1)
+    ref = float(np.median(T[np.minimum((iy / c).astype(int), gh - 1), np.minimum((ix / c).astype(int), gw - 1)]))
+    if ref <= 0:
+        return None
+    T = T / ref
+    d = max(2, int(0.01 * S))
+    reach, quiet, margin = int(0.04 * S), int(0.03 * S), 0.004 * S
+    px, py = [], []
+    for th in np.linspace(0, 2 * np.pi, rays, endpoint=False):
+        dx, dy = np.cos(th), np.sin(th)
+        rmax = int(S * 1.5)
+        r = np.arange(rmax)
+        x, y = cx + dx * r, cy + dy * r
+        inside = (x >= 0) & (x < W - 1) & (y >= 0) & (y < H - 1)
+        n = rmax if inside.all() else int(np.argmin(inside))
+        if n < 4:
+            continue
+        x, y = x[:n], y[:n]
+        low = T[np.minimum((y / c).astype(int), gh - 1), np.minimum((x / c).astype(int), gw - 1)] < 0.2
+        # where the stars end: the first stretch without stars that is long enough (or reaches the border)
+        rT, run = None, 0
+        for k in range(n):
+            run = run + 1 if low[k] else 0
+            if run >= quiet:
+                rT = k - quiet + 1
+                break
+        if rT is None and n < rmax and run >= max(3, quiet // 4):
+            rT = n - run
+        if rT is None:
+            continue
+        prof = bg[y.astype(int), x.astype(int)]
+        lo, hi = max(0, rT - reach), min(n - d - 1, rT + reach)
+        if hi - lo < 3:
+            continue
+        k = np.arange(lo, hi)
+        step = np.abs(prof[k + d] - prof[k])
+        if step.max() < 0.04:
+            continue
+        e = k[int(np.argmax(step))] + d / 2
+        ex, ey = cx + dx * e, cy + dy * e
+        if ex < margin or ey < margin or ex > W - 1 - margin or ey > H - 1 - margin:
+            continue                                    # the photo's own border, not an edge in the picture
+        px.append(ex)
+        py.append(ey)
+    if len(px) < rays * 0.3:
+        return None
+    px, py = np.array(px), np.array(py)
+    lines = _robust_lines(px, py, tol=max(1.5, 0.006 * S))
+    best = None
+    centre = np.array([cx, cy])
+    for comb in combinations(range(len(lines)), 4):
+        L = [lines[i] for i in comb]
+        ang = []
+        for nn, cc, _ in L:
+            foot = centre - (nn @ centre - cc) * nn
+            ang.append(np.arctan2(foot[1] - cy, foot[0] - cx))
+        order = np.argsort(ang)
+        L = [L[i] for i in order]
+        A = np.sort(ang)
+        gaps = np.diff(np.r_[A, A[0] + 2 * np.pi])
+        if (gaps < np.radians(35)).any() or (gaps > np.radians(150)).any():
+            continue                                    # one line per side
+        q = []
+        for i in range(4):
+            M = np.array([L[i][0], L[(i + 1) % 4][0]])
+            if abs(np.linalg.det(M)) < 1e-6:
+                break
+            q.append(np.linalg.solve(M, [L[i][1], L[(i + 1) % 4][1]]))
+        if len(q) < 4:
+            continue
+        q = np.array(q)
+        if (q[:, 0] < -0.25 * W).any() or (q[:, 0] > 1.25 * W).any() or (q[:, 1] < -0.25 * H).any() \
+                or (q[:, 1] > 1.25 * H).any():
+            continue
+        cr = [_cross2(q[(i + 1) % 4] - q[i], q[(i + 2) % 4] - q[(i + 1) % 4]) for i in range(4)]
+        if not (all(v > 0 for v in cr) or all(v < 0 for v in cr)):
+            continue                                    # not convex
+        inside = np.ones(len(ix), bool)
+        for i in range(4):
+            e1 = q[(i + 1) % 4] - q[i]
+            side = e1[0] * (iy - q[i][1]) - e1[1] * (ix - q[i][0])
+            inside &= (side >= -0.01 * S) if cr[0] > 0 else (side <= 0.01 * S)
+        if inside.mean() < 0.9:
+            continue                                    # the star field must lie inside
+        area = 0.5 * abs(sum(_cross2(q[i], q[(i + 1) % 4]) for i in range(4)))
+        if not 0.05 * W * H < area < 1.2 * W * H:
+            continue
+        score = sum(l[2] for l in L)
+        if best is None or score > best[0]:
+            best = (score, q)
+    if best is None:
+        return None
+    q = best[1]
+    # corners clockwise on screen, starting with the top-left (the top edge is the highest one)
+    mid = q.mean(0)
+    q = q[np.argsort(np.arctan2(q[:, 1] - mid[1], q[:, 0] - mid[0]))]
+    top = int(np.argmin([(q[i][1] + q[(i + 1) % 4][1]) for i in range(4)]))
+    q = np.roll(q, -top, axis=0) * f
+    support = best[0] / rays
+    return tuple((float(x), float(y)) for x, y in q), float(support)
 
 
 def _star_area(lum: np.ndarray, angle: float | None = None) -> ScreenGuess:

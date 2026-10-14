@@ -33,8 +33,9 @@ shots and even phone photos – no experience with astronomy software needed.
 - **Overlays:** RA/Dec grid, constellation figures and names, and a north/east compass.
 - **Equipment profiles** for telescopes, DSLR and mirrorless cameras, smartphones and photos of a screen,
   chosen automatically from the image's own camera information.
-- **Photos of a screen:** recognises a phone photo of a tablet or monitor showing stars, straightens it,
-  corrects the perspective, selects the star area and hides the app's text and buttons before solving.
+- **Photos of a screen:** recognises a phone photo of a tablet or monitor showing stars – also when taken
+  from the side – squares it up with the screen's true proportions, selects the star area and hides the
+  app's text and buttons before solving.
 - **Help for difficult images:** object hints ("this is M101"), uneven backgrounds, a starless-image check,
   phone and wide-field aids, lens distortion correction, and **Crop and rotate** to solve only part of an
   image – with areas you can hide, such as a roof, a tree or app menus.
@@ -42,18 +43,14 @@ shots and even phone photos – no experience with astronomy software needed.
   and **batch solve** whole folders.
 - A built-in manual, and two astronomy quizzes with 1,000 questions each.
 
-## What's new in 0.9.9
+## What's new in 0.9.10
 
-- **Photos of a screen are cropped automatically** once the profile *Photo of a screen or print* is chosen:
-  Crop and rotate opens with the stars selected and the app's text and buttons marked, ready to apply.
-- **Perspective correction** for screens photographed from the side: PlateSolver finds the screen's edges
-  and squares the picture up – when solving fails (default), always, or never (Settings › Profiles).
-  **Screen corners** in Crop and rotate sets the corners by hand.
-- **Find app text and buttons** marks a whole panel as one area and leaves clumps of stars, glows and
-  satellite trails alone.
-- The object list has an **Opens** column: where double-clicking an object leads (Wikipedia, SIMBAD, …).
-- A tidier toolbar with smaller icons. **Settings** is under **Tools › Settings…** (Ctrl+,; on a Mac
-  **PlateSolver › Settings…**), Help is in the menu bar, and the profiles are also under **Tools › Profile**.
+- **Photos of a screen taken from the side** are recognised and squared up automatically. PlateSolver finds
+  the screen's edges at any angle and puts its corners back on a rectangle with the screen's true
+  proportions, worked out from the camera's focal length – so the stars get their true positions and round
+  shapes back. In tests with photos taken 20–30 % skewed, star positions became 5–7 times more accurate.
+- *Correct the perspective* (Settings › Profiles) now squares the picture up as soon as the screen is
+  clearly skewed, not only when solving fails.
 
 Earlier versions: see [Releases](../../releases) and *What's new* in the manual (Help › Manual).
 

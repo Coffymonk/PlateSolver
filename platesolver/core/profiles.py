@@ -131,12 +131,15 @@ class ProfileSettings(SettingsSection):
                          "Otherwise a bar above the image offers the profile; nothing changes unless you click it."),
                 SettingField("perspective", "Correct the perspective of photos of a screen", CHOICE, "if_fails",
                              choices=[("always", "Always, when the screen's four edges are found"),
-                                      ("if_fails", "Only when solving fails (one more try)"),
+                                      ("if_fails", "When the screen is clearly skewed, or when solving fails"),
                                       ("off", "Never")],
-                             help="A screen photographed a little from the side is not quite a rectangle, so its "
-                                  "stars are slightly out of place. PlateSolver finds the screen's edges and squares "
-                                  "the picture up. Crop and rotate › Screen corners does it by hand. Only used with "
-                                  "the profile 'Photo of a screen or print'.")]
+                             help="A screen photographed from the side is not a rectangle in the photo, so its "
+                                  "stars are squashed and out of place – more on the far side. PlateSolver finds the "
+                                  "screen's edges at any angle and squares the picture up with the screen's true "
+                                  "proportions (worked out from the camera's focal length in the photo). The default "
+                                  "does it when the screen is skewed by 5 % or more, and as one more try when solving "
+                                  "fails. Crop and rotate › Screen corners does it by hand. Only used with the "
+                                  "profile 'Photo of a screen or print'.")]
 
     @staticmethod
     def migrate(store) -> None:
